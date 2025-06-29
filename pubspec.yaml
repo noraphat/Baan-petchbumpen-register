@@ -37,6 +37,9 @@ dependencies:
   sunmi_printer_plus: ^2.1.01
   image_picker: ^1.1.0
   mobile_scanner: ^4.0.1
+  sqflite: ^2.3.2+1
+  path_provider: ^2.1.2
+  intl: ^0.18.1
 
 dev_dependencies:
   flutter_test:

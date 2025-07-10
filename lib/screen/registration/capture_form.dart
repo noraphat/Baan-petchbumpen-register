@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:typed_data';
 import 'package:thai_idcard_reader_flutter/thai_idcard_reader_flutter.dart';
 import 'package:intl/intl.dart';
 

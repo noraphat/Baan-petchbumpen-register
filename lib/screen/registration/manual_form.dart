@@ -4,6 +4,7 @@ import '../../models/reg_data.dart';
 import '../../services/db_helper.dart';
 import '../../services/printer_service.dart';
 import '../../services/address_service.dart';
+import '../../widgets/buddhist_calendar_picker.dart';
 
 class ManualForm extends StatefulWidget {
   const ManualForm({super.key});
@@ -23,10 +24,13 @@ class _ManualFormState extends State<ManualForm> {
   int? _selProvId, _selDistId, _selSubId;
 
   String _gender = 'ชาย';
+  final List<String> _genders = ['พระ', 'สามเณร', 'แม่ชี', 'ชาย', 'หญิง', 'อื่นๆ'];
   bool _found = false;
   bool _loaded = false;
   final _formKey = GlobalKey<FormState>();
   final _firstFocus = FocusNode();
+
+  DateTime? _selectedDob;
 
   @override
   void initState() {
@@ -50,6 +54,7 @@ class _ManualFormState extends State<ManualForm> {
         addrCtrl.clear();
         _gender = 'ชาย';
         _selProvId = _selDistId = _selSubId = null;
+        _selectedDob = null;
       });
       FocusScope.of(context).requestFocus(_firstFocus);
     } else {
@@ -59,6 +64,7 @@ class _ManualFormState extends State<ManualForm> {
         firstCtrl.text = old.first;
         lastCtrl.text = old.last;
         dobCtrl.text = old.dob;
+        _selectedDob = DateFormat('d MMMM yyyy', 'th_TH').parse(old.dob.replaceAll(RegExp(r'[\u0E00-\u0E7F\s]+'), ''));
         phoneCtrl.text = old.phone;
 
         final prov = AddressService().provinces.firstWhere(
@@ -110,10 +116,42 @@ class _ManualFormState extends State<ManualForm> {
               const SizedBox(height: 16),
               _buildField(label: 'ชื่อ', controller: firstCtrl, enabled: !_found, mandatory: true, focus: _firstFocus),
               _buildField(label: 'นามสกุล', controller: lastCtrl, enabled: !_found, mandatory: true),
-              GestureDetector(
-                onTap: _found ? null : _pickDate,
-                child: AbsorbPointer(
-                  child: _buildField(label: 'วันเดือนปีเกิด (พ.ศ.)', controller: dobCtrl, enabled: !_found, mandatory: true),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: GestureDetector(
+                  onTap: _found
+                      ? null
+                      : () async {
+                          await showDialog(
+                            context: context,
+                            builder: (_) => Dialog(
+                              child: SizedBox(
+                                width: MediaQuery.of(context).size.width * 0.9,
+                                height: MediaQuery.of(context).size.height * 0.6,
+                                child: BuddhistCalendarPicker(
+                                  initialDate: _selectedDob,
+                                  onDateSelected: (date) {
+                                    setState(() {
+                                      _selectedDob = date;
+                                      dobCtrl.text = '${date.day} '
+                                        '${DateFormat.MMMM('th_TH').format(date)} '
+                                        '${date.year + 543}';
+                                    });
+                                    Navigator.pop(context);
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                  child: AbsorbPointer(
+                    child: _buildField(
+                      label: 'วันเดือนปีเกิด (พ.ศ.)',
+                      controller: dobCtrl,
+                      enabled: !_found,
+                      mandatory: true,
+                    ),
+                  ),
                 ),
               ),
               _buildField(label: 'เบอร์โทรศัพท์', controller: phoneCtrl, enabled: !_found, keyboard: TextInputType.phone),
@@ -160,19 +198,24 @@ class _ManualFormState extends State<ManualForm> {
               ),
               const SizedBox(height: 12),
               _buildField(label: 'ที่อยู่เพิ่มเติม (บ้านเลขที่ ฯลฯ)', controller: addrCtrl, lines: 2, enabled: !_found),
-              Row(children: [
-                const Text('เพศ:'),
-                const SizedBox(width: 16),
-                for (final g in ['ชาย', 'หญิง', 'อื่น ๆ'])
-                  Row(children: [
-                    Radio<String>(
-                      value: g,
-                      groupValue: _gender,
-                      onChanged: _found ? null : (v) => setState(() => _gender = v!),
-                    ),
-                    Text(g),
-                  ])
-              ]),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: DropdownButtonFormField<String>(
+                  value: _gender,
+                  decoration: const InputDecoration(
+                    labelText: 'เพศ',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: _genders
+                      .map((g) => DropdownMenuItem(
+                            value: g,
+                            child: Text(g),
+                          ))
+                      .toList(),
+                  onChanged: _found ? null : (v) => setState(() => _gender = v!),
+                ),
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -214,50 +257,30 @@ class _ManualFormState extends State<ManualForm> {
         ),
       );
 
-  Future<void> _pickDate() async {
-    final now = DateTime.now();
-    final d = await showDatePicker(
-      context: context,
-      locale: const Locale('th', 'TH'),
-      initialDate: DateTime(now.year - 20),
-      firstDate: DateTime(now.year - 100),
-      lastDate: now,
-    );
-    if (d != null) {
-      final buddhist = d.year + 543;
-      dobCtrl.text = DateFormat('dd/MM/').format(d) + buddhist.toString();
-      setState(() {});
-    }
-  }
-
   Future<void> _onSave() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedDob == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('กรุณาเลือกวันเกิด')));
+      return;
+    }
+    if (_selProvId == null || _selDistId == null || _selSubId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กรุณาเลือก จังหวัด / อำเภอ / ตำบล')));
+      return;
+    }
+
     final data = RegData(
       id: searchCtrl.text.trim(),
       first: firstCtrl.text.trim(),
       last: lastCtrl.text.trim(),
       dob: dobCtrl.text,
       phone: phoneCtrl.text.trim(),
-      addr: _selProvId == null || _selDistId == null || _selSubId == null
-          ? ''
-          : '${AddressService().provinces.firstWhere((p) => p.id == _selProvId!).nameTh}, '
+      addr: '${AddressService().provinces.firstWhere((p) => p.id == _selProvId!).nameTh}, '
             '${AddressService().districts.firstWhere((d) => d.id == _selDistId!).nameTh}, '
             '${AddressService().subs.firstWhere((s) => s.id == _selSubId!).nameTh}, '
             '${addrCtrl.text.trim()}',
       gender: _gender,
     );
-
-    if (_found) {
-      await PrinterService().printReceipt(data);
-      if (mounted) Navigator.pop(context);
-      return;
-    }
-
-    if (!_formKey.currentState!.validate()) return;
-    if (_selProvId == null || _selDistId == null || _selSubId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('กรุณาเลือก จังหวัด / อำเภอ / ตำบล')));
-      return;
-    }
 
     await DbHelper().insert(data);
     await PrinterService().printReceipt(data);

@@ -3,15 +3,16 @@ import 'package:intl/intl.dart';
 import '../../models/reg_data.dart';
 import '../../services/db_helper.dart';
 import '../../services/printer_service.dart';
+import '../../services/address_service.dart';
 
 class ManualForm extends StatefulWidget {
   const ManualForm({super.key});
+
   @override
   State<ManualForm> createState() => _ManualFormState();
 }
 
 class _ManualFormState extends State<ManualForm> {
-  // --- controller ทุกช่อง ---
   final searchCtrl = TextEditingController();
   final firstCtrl = TextEditingController();
   final lastCtrl = TextEditingController();
@@ -19,20 +20,26 @@ class _ManualFormState extends State<ManualForm> {
   final phoneCtrl = TextEditingController();
   final addrCtrl = TextEditingController();
 
+  int? _selProvId, _selDistId, _selSubId;
+
   String _gender = 'ชาย';
-  bool _found = false; // มีในระบบ?
-  bool _loaded = false; // กดค้นหาหรือยัง
-
+  bool _found = false;
+  bool _loaded = false;
   final _formKey = GlobalKey<FormState>();
+  final _firstFocus = FocusNode();
 
-  // ---------- ฟังก์ชันค้นหา ----------
+  @override
+  void initState() {
+    super.initState();
+    AddressService().init();
+  }
+
   Future<void> _search() async {
     final q = searchCtrl.text.trim();
-    if (q.length < 5) return; // กรองคร่าว ๆ
+    if (q.length < 5) return;
 
     final old = await DbHelper().fetchById(q);
     if (old == null) {
-      // ไม่พบ → Enable form
       setState(() {
         _found = false;
         _loaded = true;
@@ -42,10 +49,10 @@ class _ManualFormState extends State<ManualForm> {
         phoneCtrl.clear();
         addrCtrl.clear();
         _gender = 'ชาย';
+        _selProvId = _selDistId = _selSubId = null;
       });
       FocusScope.of(context).requestFocus(_firstFocus);
     } else {
-      // พบ → แสดง & Lock
       setState(() {
         _found = true;
         _loaded = true;
@@ -53,154 +60,136 @@ class _ManualFormState extends State<ManualForm> {
         lastCtrl.text = old.last;
         dobCtrl.text = old.dob;
         phoneCtrl.text = old.phone;
-        addrCtrl.text = old.addr;
+
+        final prov = AddressService().provinces.firstWhere(
+            (p) => old.addr.contains(p.nameTh),
+            orElse: () => AddressService().provinces.first);
+        _selProvId = prov.id;
+
+        final dist = AddressService()
+            .districtsOf(prov.id)
+            .firstWhere((d) => old.addr.contains(d.nameTh), orElse: () => AddressService().districtsOf(prov.id).first);
+        _selDistId = dist.id;
+
+        final sub = AddressService()
+            .subsOf(dist.id)
+            .firstWhere((s) => old.addr.contains(s.nameTh), orElse: () => AddressService().subsOf(dist.id).first);
+        _selSubId = sub.id;
+
+        final parts = old.addr.split(', ');
+        addrCtrl.text = parts.isNotEmpty ? parts.last : '';
+
         _gender = old.gender;
       });
     }
   }
 
-  // ---------- FocusNode เพื่อโฟกัสชื่อทันที ----------
-  final _firstFocus = FocusNode();
-
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('ลงทะเบียน')),
-    body: SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ───────── ช่องค้นหา + ปุ่มสวย ๆ ─────────
-            TextFormField(
-              controller: searchCtrl,
-              maxLength: 13,
-              decoration: InputDecoration(
-                labelText: 'หมายเลขประชาชน / เบอร์โทรศัพท์',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.search),
-                  onPressed: _search,
+        appBar: AppBar(title: const Text('ลงทะเบียน')),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              TextFormField(
+                controller: searchCtrl,
+                maxLength: 13,
+                decoration: InputDecoration(
+                  labelText: 'หมายเลขประชาชน / เบอร์โทร (ค้นหา)',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: IconButton(
+                    tooltip: 'ค้นหา',
+                    icon: const Icon(Icons.arrow_forward_ios_rounded),
+                    onPressed: _search,
+                  ),
+                ),
+                keyboardType: TextInputType.number,
+                onFieldSubmitted: (_) => _search(),
+              ),
+              const SizedBox(height: 16),
+              _buildField(label: 'ชื่อ', controller: firstCtrl, enabled: !_found, mandatory: true, focus: _firstFocus),
+              _buildField(label: 'นามสกุล', controller: lastCtrl, enabled: !_found, mandatory: true),
+              GestureDetector(
+                onTap: _found ? null : _pickDate,
+                child: AbsorbPointer(
+                  child: _buildField(label: 'วันเดือนปีเกิด (พ.ศ.)', controller: dobCtrl, enabled: !_found, mandatory: true),
                 ),
               ),
-              keyboardType: TextInputType.number,
-              onFieldSubmitted: (_) => _search(),
-            ),
-            const SizedBox(height: 16),
-
-            // ───────── ฟิลด์ข้อมูล ─────────
-            _buildField(
-              label: 'ชื่อ',
-              controller: firstCtrl,
-              enabled: !_found,
-              focus: _firstFocus,
-              mandatory: true,
-            ),
-            _buildField(
-              label: 'นามสกุล',
-              controller: lastCtrl,
-              enabled: !_found,
-              mandatory: true,
-            ),
-
-            // วันเกิด
-            GestureDetector(
-              onTap: _found ? null : _pickDate,
-              child: AbsorbPointer(
-                child: _buildField(
-                  label: 'วันเดือนปีเกิด (พ.ศ.)',
-                  controller: dobCtrl,
-                  enabled: !_found,
-                  mandatory: true,
-                ),
+              _buildField(label: 'เบอร์โทรศัพท์', controller: phoneCtrl, enabled: !_found, keyboard: TextInputType.phone),
+              DropdownButtonFormField<int>(
+                value: _selProvId,
+                decoration: const InputDecoration(labelText: 'จังหวัด'),
+                items: AddressService()
+                    .provinces
+                    .map((p) => DropdownMenuItem(value: p.id, child: Text(p.nameTh)))
+                    .toList(),
+                onChanged: _found ? null : (v) => setState(() {
+                  _selProvId = v;
+                  _selDistId = _selSubId = null;
+                }),
               ),
-            ),
-
-            // เบอร์
-            _buildField(
-              label: 'เบอร์โทรศัพท์',
-              controller: phoneCtrl,
-              enabled: !_found,
-              keyboard: TextInputType.phone,
-            ),
-
-            // ที่อยู่
-            _buildField(
-              label: 'ที่อยู่ (จังหวัด, อำเภอ, ตำบล, บ้านเลขที่…)',
-              controller: addrCtrl,
-              enabled: !_found,
-              lines: 2,
-            ),
-
-            // เพศ
-            Row(
-              children: [
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                value: _selDistId,
+                decoration: const InputDecoration(labelText: 'อำเภอ'),
+                items: _selProvId == null
+                    ? []
+                    : AddressService()
+                        .districtsOf(_selProvId!)
+                        .map((d) => DropdownMenuItem(value: d.id, child: Text(d.nameTh)))
+                        .toList(),
+                onChanged: (_selProvId == null || _found)
+                    ? null
+                    : (v) => setState(() {
+                          _selDistId = v;
+                          _selSubId = null;
+                        }),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                value: _selSubId,
+                decoration: const InputDecoration(labelText: 'ตำบล'),
+                items: _selDistId == null
+                    ? []
+                    : AddressService()
+                        .subsOf(_selDistId!)
+                        .map((s) => DropdownMenuItem(value: s.id, child: Text(s.nameTh)))
+                        .toList(),
+                onChanged: (_selDistId == null || _found) ? null : (v) => setState(() => _selSubId = v),
+              ),
+              const SizedBox(height: 12),
+              _buildField(label: 'ที่อยู่เพิ่มเติม (บ้านเลขที่ ฯลฯ)', controller: addrCtrl, lines: 2, enabled: !_found),
+              Row(children: [
                 const Text('เพศ:'),
                 const SizedBox(width: 16),
                 for (final g in ['ชาย', 'หญิง', 'อื่น ๆ'])
-                  Row(
-                    children: [
-                      Radio<String>(
-                        value: g,
-                        groupValue: _gender,
-                        onChanged: _found
-                            ? null
-                            : (v) => setState(() => _gender = v!),
-                      ),
-                      Text(g),
-                    ],
+                  Row(children: [
+                    Radio<String>(
+                      value: g,
+                      groupValue: _gender,
+                      onChanged: _found ? null : (v) => setState(() => _gender = v!),
+                    ),
+                    Text(g),
+                  ])
+              ]),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.check_circle_outline),
+                  label: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: Text(_found ? 'ลงทะเบียน' : 'บันทึก & พิมพ์ใบเสร็จ', key: ValueKey<bool>(_found)),
                   ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // ───────── ปุ่มบันทึก / ลงทะเบียน ─────────
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: !_loaded
-                    ? null
-                    : () async {
-                        if (_found) {
-                          Navigator.pop(context); // แค่ลงทะเบียนเข้าเรียน
-                          return;
-                        }
-                        if (!_formKey.currentState!.validate()) return;
-                        final data = RegData(
-                          id: searchCtrl.text.trim(), // หมายเลขประชาชน/โทร
-                          first: firstCtrl.text.trim(),
-                          last: lastCtrl.text.trim(),
-                          dob: dobCtrl.text, //  dd/MM/พ.ศ.
-                          phone: phoneCtrl.text.trim(),
-                          addr: addrCtrl.text.trim(),
-                          gender: _gender,
-                        );
-                        await DbHelper().insert(data);
-                        await PrinterService(context).printReceipt(
-                          RegData(
-                            id: data.id,
-                            first: data.first,
-                            last: data.last,
-                            dob: '',
-                            phone: '',
-                            addr: '',
-                            gender: '',
-                          ),
-                        );
-
-                        if (mounted) Navigator.pop(context);
-                      },
-                child: Text(_found ? 'ลงทะเบียน' : 'บันทึก & พิมพ์ใบเสร็จ'),
+                  onPressed: !_loaded ? null : _onSave,
+                ),
               ),
-            ),
-          ],
+            ]),
+          ),
         ),
-      ),
-    ),
-  );
+      );
 
-  // ---------- widget helper ----------
   Widget _buildField({
     required String label,
     required TextEditingController controller,
@@ -209,25 +198,21 @@ class _ManualFormState extends State<ManualForm> {
     int lines = 1,
     FocusNode? focus,
     TextInputType keyboard = TextInputType.text,
-  }) => Padding(
-    padding: const EdgeInsets.only(bottom: 16),
-    child: TextFormField(
-      controller: controller,
-      enabled: enabled,
-      focusNode: focus,
-      maxLines: lines,
-      keyboardType: keyboard,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
-      validator: mandatory && !enabled
-          ? null
-          : (mandatory
-                ? (v) => (v == null || v.isEmpty) ? 'ระบุ $label' : null
-                : null),
-    ),
-  );
+  }) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: TextFormField(
+          controller: controller,
+          enabled: enabled,
+          focusNode: focus,
+          maxLines: lines,
+          keyboardType: keyboard,
+          decoration: InputDecoration(labelText: label),
+          validator: mandatory && !enabled
+              ? null
+              : (mandatory ? (v) => (v == null || v.isEmpty) ? 'ระบุ $label' : null : null),
+        ),
+      );
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -239,10 +224,44 @@ class _ManualFormState extends State<ManualForm> {
       lastDate: now,
     );
     if (d != null) {
-      final buddhistYear = d.year + 543;
-      dobCtrl.text = DateFormat('dd/MM/').format(d) + buddhistYear.toString();
+      final buddhist = d.year + 543;
+      dobCtrl.text = DateFormat('dd/MM/').format(d) + buddhist.toString();
       setState(() {});
     }
+  }
+
+  Future<void> _onSave() async {
+    final data = RegData(
+      id: searchCtrl.text.trim(),
+      first: firstCtrl.text.trim(),
+      last: lastCtrl.text.trim(),
+      dob: dobCtrl.text,
+      phone: phoneCtrl.text.trim(),
+      addr: _selProvId == null || _selDistId == null || _selSubId == null
+          ? ''
+          : '${AddressService().provinces.firstWhere((p) => p.id == _selProvId!).nameTh}, '
+            '${AddressService().districts.firstWhere((d) => d.id == _selDistId!).nameTh}, '
+            '${AddressService().subs.firstWhere((s) => s.id == _selSubId!).nameTh}, '
+            '${addrCtrl.text.trim()}',
+      gender: _gender,
+    );
+
+    if (_found) {
+      await PrinterService().printReceipt(data);
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
+    if (!_formKey.currentState!.validate()) return;
+    if (_selProvId == null || _selDistId == null || _selSubId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กรุณาเลือก จังหวัด / อำเภอ / ตำบล')));
+      return;
+    }
+
+    await DbHelper().insert(data);
+    await PrinterService().printReceipt(data);
+    if (mounted) Navigator.pop(context);
   }
 
   @override

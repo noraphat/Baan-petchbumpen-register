@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/reg_data.dart';
 import '../../services/db_helper.dart';
-import '../../services/printer_service.dart';
 import '../../services/address_service.dart';
 import '../../widgets/buddhist_calendar_picker.dart';
 
@@ -223,7 +222,7 @@ class _ManualFormState extends State<ManualForm> {
                   icon: const Icon(Icons.check_circle_outline),
                   label: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
-                    child: Text(_found ? 'ลงทะเบียน' : 'บันทึก & พิมพ์ใบเสร็จ', key: ValueKey<bool>(_found)),
+                    child: Text(_found ? 'ลงทะเบียน' : 'บันทึก', key: ValueKey<bool>(_found)),
                   ),
                   onPressed: !_loaded ? null : _onSave,
                 ),
@@ -269,7 +268,7 @@ class _ManualFormState extends State<ManualForm> {
       return;
     }
 
-    final data = RegData(
+    final data = RegData.manual(
       id: searchCtrl.text.trim(),
       first: firstCtrl.text.trim(),
       last: lastCtrl.text.trim(),
@@ -283,8 +282,121 @@ class _ManualFormState extends State<ManualForm> {
     );
 
     await DbHelper().insert(data);
-    await PrinterService().printReceipt(data);
+    await _showAdditionalInfoDialog(data.id); // ส่ง id ไปด้วย
     if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _showAdditionalInfoDialog(String regId) async {
+    DateTime? startDate;
+    DateTime? endDate;
+    final shirtCtrl = TextEditingController();
+    final pantsCtrl = TextEditingController();
+    final matCtrl = TextEditingController();
+    final pillowCtrl = TextEditingController();
+    final blanketCtrl = TextEditingController();
+    final locationCtrl = TextEditingController();
+    final notesCtrl = TextEditingController();
+    bool withChildren = false;
+    final childrenCtrl = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('ข้อมูลเพิ่มเติม'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) setState(() => startDate = picked);
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(labelText: 'วันที่เริ่มต้น'),
+                          child: Text(startDate == null
+                              ? 'เลือกวันที่'
+                              : DateFormat('dd/MM/yyyy').format(startDate!)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: startDate ?? DateTime.now(),
+                            firstDate: DateTime(2020),
+                            lastDate: DateTime(2100),
+                          );
+                          if (picked != null) setState(() => endDate = picked);
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(labelText: 'วันที่สิ้นสุด'),
+                          child: Text(endDate == null
+                              ? 'เลือกวันที่'
+                              : DateFormat('dd/MM/yyyy').format(endDate!)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                TextFormField(controller: shirtCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'จำนวนเสื้อขาว')),
+                TextFormField(controller: pantsCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'จำนวนกางเกงขาว')),
+                TextFormField(controller: matCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'จำนวนเสื่อ')),
+                TextFormField(controller: pillowCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'จำนวนหมอน')),
+                TextFormField(controller: blanketCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'จำนวนผ้าห่ม')),
+                TextFormField(controller: locationCtrl, decoration: const InputDecoration(labelText: 'ห้อง/ศาลา/สถานที่พัก')),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: withChildren,
+                      onChanged: (v) => setState(() => withChildren = v!),
+                    ),
+                    const Text('มากับเด็ก'),
+                    if (withChildren)
+                      Expanded(
+                        child: TextFormField(
+                          controller: childrenCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: 'จำนวนเด็ก'),
+                        ),
+                      ),
+                  ],
+                ),
+                TextFormField(
+                  controller: notesCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'หมายเหตุ',
+                    hintText: 'โรคประจำตัว, ไม่ทานเนื้อสัตว์ ฯลฯ',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                // TODO: save to DB (ใช้ regId เป็น key เชื่อมกับข้อมูลหลัก)
+                // ตัวอย่าง: await DbHelper().insertAdditionalInfo(...);
+                Navigator.of(context).pop();
+              },
+              child: const Text('บันทึก'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override

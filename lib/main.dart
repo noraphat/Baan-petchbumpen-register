@@ -2,11 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';  // ← ต้อง import
 import 'package:flutter_petchbumpen_register/screen/home_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
-
+import 'services/db_helper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('th', null);     // โหลด pattern ไทย
+  
+  // ล้างข้อมูลฐานข้อมูลใน Debug Mode
+  if (const bool.fromEnvironment('dart.vm.product') == false) {
+    try {
+      await DbHelper().clearAllData();
+      print('🗑️ Debug Mode: ล้างข้อมูลฐานข้อมูลเรียบร้อยแล้ว');
+    } catch (e) {
+      print('❌ Debug Mode: ไม่สามารถล้างข้อมูลฐานข้อมูลได้: $e');
+    }
+  }
+  
   runApp(const DhammaReg());
 }
 

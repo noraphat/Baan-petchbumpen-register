@@ -3,12 +3,14 @@ import 'package:flutter_petchbumpen_register/screen/white_robe_scaner.dart';
 import '../widgets/menu_card.dart';
 import 'registration/registration_menu.dart';
 import '../services/db_helper.dart';
+import 'package:flutter/foundation.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  void _showWip(BuildContext ctx) =>
-      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('ฟังก์ชันนี้อยู่ระหว่างการพัฒนา')));
+  void _showWip(BuildContext ctx) => ScaffoldMessenger.of(ctx).showSnackBar(
+    const SnackBar(content: Text('ฟังก์ชันนี้อยู่ระหว่างการพัฒนา')),
+  );
 
   Future<void> _clearDatabase(BuildContext context) async {
     try {
@@ -21,9 +23,9 @@ class HomeScreen extends StatelessWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
       }
     }
   }
@@ -31,62 +33,133 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      ('ลงทะเบียน', Icons.app_registration, () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const RegistrationMenu()));
-      }),
-      ('เบิกชุดขาว', Icons.checkroom, () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const WhiteRobeScanner()));
-      }),
-      ('จองที่พัก', Icons.bed_outlined, () => _showWip(context)),
-      ('ตารางกิจกรรม', Icons.event_note, () => _showWip(context)),
-      ('สรุปผลประจำวัน', Icons.bar_chart, () => _showWip(context)),
+      {
+        'label': 'ลงทะเบียน',
+        'icon': Icons.app_registration,
+        'onTap': () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const RegistrationMenu()),
+        ),
+      },
+      {
+        'label': 'เบิกชุดขาว',
+        'icon': Icons.checkroom,
+        'onTap': () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const WhiteRobeScanner()),
+        ),
+      },
+      {
+        'label': 'จองที่พัก',
+        'icon': Icons.bed_outlined,
+        'onTap': () => _showWip(context),
+      },
+      {
+        'label': 'ตารางกิจกรรม',
+        'icon': Icons.event_note,
+        'onTap': () => _showWip(context),
+      },
+      {
+        'label': 'สรุปผลประจำวัน',
+        'icon': Icons.bar_chart,
+        'onTap': () => _showWip(context),
+      },
     ];
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF6FAF7), // สีพื้นหลังอ่อน
       appBar: AppBar(
-        title: const Text('บ้านเพชรบำเพ็ญ'),
-        actions: [
-          // แสดงปุ่ม Clear เฉพาะใน Debug Mode
-          if (const bool.fromEnvironment('dart.vm.product') == false)
-            IconButton(
-              icon: const Icon(Icons.delete_forever),
-              tooltip: 'ล้างข้อมูลฐานข้อมูล (Debug)',
-              onPressed: () => _showClearConfirmDialog(context),
+        title: Row(
+          children: [
+            Icon(
+              Icons.spa,
+              color: Colors.purple,
+              size: 32,
+            ), // เปลี่ยนเป็นสีม่วง
+            const SizedBox(width: 8),
+            const Text(
+              'บ้านเพชรบำเพ็ญ',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
             ),
-        ],
+          ],
+        ),
+        backgroundColor: Colors.white,
+        elevation: 2,
       ),
-      body: GridView.count(
-        padding: const EdgeInsets.all(16),
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        children: [
-          for (final m in items) MenuCard(label: m.$1, icon: m.$2, onTap: m.$3),
-        ],
-      ),
-    );
-  }
-
-  void _showClearConfirmDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('ยืนยันการล้างข้อมูล'),
-        content: const Text('คุณต้องการล้างข้อมูลทั้งหมดในฐานข้อมูลหรือไม่?\n\nการดำเนินการนี้ไม่สามารถยกเลิกได้'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ยกเลิก'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _clearDatabase(context);
-            },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('ล้างข้อมูล'),
-          ),
-        ],
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Expanded(
+              child: GridView.count(
+                crossAxisCount: 2,
+                mainAxisSpacing: 20,
+                crossAxisSpacing: 20,
+                childAspectRatio: 1.1,
+                shrinkWrap: true,
+                children: items.map((item) {
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: item['onTap'] as void Function(),
+                    child: Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              item['icon'] as IconData,
+                              size: 40,
+                              color: Colors.purple,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              item['label'] as String,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            // เพิ่มปุ่มทดสอบสำหรับ Debug
+            if (kDebugMode) ...[
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.bug_report),
+                  label: const Text('ทดสอบระบบ'),
+                  onPressed: () async {
+                    final dbHelper = DbHelper();
+                    await dbHelper.createTestData();
+                    await dbHelper.debugPrintAllData();
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'สร้างข้อมูลทดสอบแล้ว ดู Console สำหรับรายละเอียด',
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

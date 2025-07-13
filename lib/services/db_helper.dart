@@ -35,7 +35,7 @@ class DbHelper {
             updatedAt TEXT
           )
         ''');
-        
+
         // ตารางข้อมูลเพิ่มเติม
         await db.execute('''
           CREATE TABLE reg_additional_info (
@@ -80,16 +80,21 @@ class DbHelper {
             )
           ''');
         }
-        
+
         if (oldVersion < 3) {
           // เพิ่มคอลัมน์ใหม่ในตาราง regs
-          await db.execute('ALTER TABLE regs ADD COLUMN hasIdCard INTEGER DEFAULT 0');
+          await db.execute(
+            'ALTER TABLE regs ADD COLUMN hasIdCard INTEGER DEFAULT 0',
+          );
           await db.execute('ALTER TABLE regs ADD COLUMN createdAt TEXT');
           await db.execute('ALTER TABLE regs ADD COLUMN updatedAt TEXT');
-          
+
           // อัปเดตข้อมูลเก่า
           final now = DateTime.now().toIso8601String();
-          await db.execute('UPDATE regs SET hasIdCard = 0, createdAt = ?, updatedAt = ?', [now, now]);
+          await db.execute(
+            'UPDATE regs SET hasIdCard = 0, createdAt = ?, updatedAt = ?',
+            [now, now],
+          );
         }
       },
     );
@@ -97,15 +102,26 @@ class DbHelper {
 
   // ฟังก์ชันสำหรับข้อมูลหลัก
   Future<RegData?> fetchById(String id) async {
-    final res = await (await db).query('regs', where: 'id = ?', whereArgs: [id]);
+    final res = await (await db).query(
+      'regs',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     return res.isEmpty ? null : RegData.fromMap(res.first);
   }
 
-  Future<void> insert(RegData data) async =>
-      (await db).insert('regs', data.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  Future<void> insert(RegData data) async => (await db).insert(
+    'regs',
+    data.toMap(),
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
 
-  Future<void> update(RegData data) async =>
-      (await db).update('regs', data.toMap(), where: 'id = ?', whereArgs: [data.id]);
+  Future<void> update(RegData data) async => (await db).update(
+    'regs',
+    data.toMap(),
+    where: 'id = ?',
+    whereArgs: [data.id],
+  );
 
   Future<List<RegData>> fetchAll() async {
     final res = await (await db).query('regs', orderBy: 'first ASC');
@@ -114,10 +130,10 @@ class DbHelper {
 
   Future<List<RegData>> fetchByIdCard(bool hasIdCard) async {
     final res = await (await db).query(
-      'regs', 
-      where: 'hasIdCard = ?', 
+      'regs',
+      where: 'hasIdCard = ?',
       whereArgs: [hasIdCard ? 1 : 0],
-      orderBy: 'first ASC'
+      orderBy: 'first ASC',
     );
     return res.map((m) => RegData.fromMap(m)).toList();
   }
@@ -127,30 +143,43 @@ class DbHelper {
 
   // ฟังก์ชันสำหรับข้อมูลเพิ่มเติม
   Future<RegAdditionalInfo?> fetchAdditionalInfo(String regId) async {
-    final res = await (await db).query('reg_additional_info', where: 'regId = ?', whereArgs: [regId]);
+    final res = await (await db).query(
+      'reg_additional_info',
+      where: 'regId = ?',
+      whereArgs: [regId],
+    );
     return res.isEmpty ? null : RegAdditionalInfo.fromMap(res.first);
   }
 
   Future<void> insertAdditionalInfo(RegAdditionalInfo data) async =>
-      (await db).insert('reg_additional_info', data.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+      (await db).insert(
+        'reg_additional_info',
+        data.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
 
   Future<void> updateAdditionalInfo(RegAdditionalInfo data) async =>
-      (await db).update('reg_additional_info', data.toMap(), where: 'regId = ?', whereArgs: [data.regId]);
+      (await db).update(
+        'reg_additional_info',
+        data.toMap(),
+        where: 'regId = ?',
+        whereArgs: [data.regId],
+      );
 
-  Future<void> deleteAdditionalInfo(String regId) async =>
-      (await db).delete('reg_additional_info', where: 'regId = ?', whereArgs: [regId]);
+  Future<void> deleteAdditionalInfo(String regId) async => (await db).delete(
+    'reg_additional_info',
+    where: 'regId = ?',
+    whereArgs: [regId],
+  );
 
   // ฟังก์ชันรวม - ดึงข้อมูลหลักและข้อมูลเพิ่มเติมพร้อมกัน
   Future<Map<String, dynamic>?> fetchCompleteData(String id) async {
     final regData = await fetchById(id);
     if (regData == null) return null;
-    
+
     final additionalInfo = await fetchAdditionalInfo(id);
-    
-    return {
-      'regData': regData,
-      'additionalInfo': additionalInfo,
-    };
+
+    return {'regData': regData, 'additionalInfo': additionalInfo};
   }
 
   // ฟังก์ชันสำหรับการแก้ไขข้อมูล
@@ -168,7 +197,10 @@ class DbHelper {
   }
 
   // ฟังก์ชันสำหรับการแก้ไขข้อมูลเพิ่มเติม
-  Future<void> updateAdditionalInfoFields(String regId, RegAdditionalInfo additionalInfo) async {
+  Future<void> updateAdditionalInfoFields(
+    String regId,
+    RegAdditionalInfo additionalInfo,
+  ) async {
     final updatedInfo = additionalInfo.copyWith(updatedAt: DateTime.now());
     await updateAdditionalInfo(updatedInfo);
   }
@@ -180,5 +212,59 @@ class DbHelper {
       await txn.delete('reg_additional_info');
       await txn.delete('regs');
     });
+  }
+
+  // ฟังก์ชันสร้างข้อมูลทดสอบ
+  Future<void> createTestData() async {
+    final testData = RegData.manual(
+      id: '1234567890123',
+      first: 'ทดสอบ',
+      last: 'ระบบ',
+      dob: '15 มกราคม 2530',
+      phone: '0812345678',
+      addr: 'กรุงเทพมหานคร, เขตปทุมวัน, แขวงลุมพินี, 123/456',
+      gender: 'ชาย',
+    );
+
+    await insert(testData);
+
+    final additionalInfo = RegAdditionalInfo.create(
+      regId: testData.id,
+      startDate: DateTime.now(),
+      endDate: DateTime.now().add(const Duration(days: 7)),
+      shirtCount: 2,
+      pantsCount: 2,
+      matCount: 1,
+      pillowCount: 1,
+      blanketCount: 1,
+      location: 'ห้อง 101',
+      withChildren: false,
+      notes: 'ข้อมูลทดสอบ',
+    );
+
+    await insertAdditionalInfo(additionalInfo);
+  }
+
+  // ฟังก์ชันแสดงข้อมูลทั้งหมดในฐานข้อมูล (สำหรับ Debug)
+  Future<void> debugPrintAllData() async {
+    final allRegs = await fetchAll();
+    print('=== ข้อมูลทั้งหมดในฐานข้อมูล ===');
+    for (final reg in allRegs) {
+      print('ID: ${reg.id}');
+      print('ชื่อ: ${reg.first} ${reg.last}');
+      print('ที่อยู่: ${reg.addr}');
+      print('เบอร์โทร: ${reg.phone}');
+      print('---');
+
+      final additionalInfo = await fetchAdditionalInfo(reg.id);
+      if (additionalInfo != null) {
+        print('ข้อมูลเพิ่มเติม:');
+        print('  เสื้อ: ${additionalInfo.shirtCount}');
+        print('  กางเกง: ${additionalInfo.pantsCount}');
+        print('  สถานที่: ${additionalInfo.location}');
+        print('  หมายเหตุ: ${additionalInfo.notes}');
+      }
+      print('==================');
+    }
   }
 }

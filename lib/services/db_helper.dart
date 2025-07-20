@@ -18,7 +18,7 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'dhamma_reg.db');
     return openDatabase(
       path,
-      version: 4, // เพิ่มเวอร์ชันเพื่ออัปเดตฐานข้อมูล
+      version: 5, // เพิ่มเวอร์ชันเพื่ออัปเดตฐานข้อมูล
       onCreate: (db, _) async {
         // ตารางข้อมูลหลัก
         await db.execute('''
@@ -74,6 +74,9 @@ class DbHelper {
         // สร้าง indexes
         await db.execute('CREATE INDEX idx_stays_visitor_id ON stays(visitor_id)');
         await db.execute('CREATE INDEX idx_stays_date_range ON stays(start_date, end_date)');
+
+        // ตาราง app_settings (สำหรับ menu visibility และการตั้งค่าระบบ)
+        await db.execute('''\n          CREATE TABLE app_settings (\n            key TEXT PRIMARY KEY,\n            value TEXT NOT NULL,\n            updated_at TEXT DEFAULT CURRENT_TIMESTAMP\n          )\n        ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -133,6 +136,39 @@ class DbHelper {
           // สร้าง indexes
           await db.execute('CREATE INDEX idx_stays_visitor_id ON stays(visitor_id)');
           await db.execute('CREATE INDEX idx_stays_date_range ON stays(start_date, end_date)');
+        }
+
+        if (oldVersion < 5) {
+          // เพิ่มตาราง app_settings
+          await db.execute('''
+            CREATE TABLE app_settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL,
+              updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+          ''');
+
+          // ตั้งค่าเริ่มต้นสำหรับ menu visibility
+          await db.insert('app_settings', {
+            'key': 'menu_white_robe_enabled',
+            'value': 'false',
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+          await db.insert('app_settings', {
+            'key': 'menu_booking_enabled', 
+            'value': 'false',
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+          await db.insert('app_settings', {
+            'key': 'menu_schedule_enabled',
+            'value': 'true', 
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+          await db.insert('app_settings', {
+            'key': 'menu_summary_enabled',
+            'value': 'true',
+            'updated_at': DateTime.now().toIso8601String(),
+          });
         }
       },
     );
@@ -419,5 +455,57 @@ class DbHelper {
     );
 
     return res.isNotEmpty;
+  }
+
+  // =================== APP SETTINGS METHODS ===================
+
+  // ดึงค่า setting
+  Future<String?> getSetting(String key) async {
+    final res = await (await db).query(
+      'app_settings',
+      where: 'key = ?',
+      whereArgs: [key],
+    );
+    return res.isEmpty ? null : res.first['value'] as String;
+  }
+
+  // ตั้งค่า setting
+  Future<void> setSetting(String key, String value) async {
+    await (await db).insert(
+      'app_settings',
+      {
+        'key': key,
+        'value': value,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // ดึงค่า setting แบบ boolean
+  Future<bool> getBoolSetting(String key, {bool defaultValue = false}) async {
+    final value = await getSetting(key);
+    if (value == null) return defaultValue;
+    return value.toLowerCase() == 'true';
+  }
+
+  // ตั้งค่า setting แบบ boolean
+  Future<void> setBoolSetting(String key, bool value) async {
+    await setSetting(key, value.toString());
+  }
+
+  // ดึงการตั้งค่าเมนูทั้งหมด
+  Future<Map<String, bool>> getAllMenuSettings() async {
+    final whiteRobe = await getBoolSetting('menu_white_robe_enabled', defaultValue: false);
+    final booking = await getBoolSetting('menu_booking_enabled', defaultValue: false);
+    final schedule = await getBoolSetting('menu_schedule_enabled', defaultValue: true);
+    final summary = await getBoolSetting('menu_summary_enabled', defaultValue: true);
+
+    return {
+      'whiteRobe': whiteRobe,
+      'booking': booking,
+      'schedule': schedule,
+      'summary': summary,
+    };
   }
 }

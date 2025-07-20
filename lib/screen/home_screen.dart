@@ -1,41 +1,151 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_petchbumpen_register/screen/white_robe_scaner.dart';
-import '../widgets/menu_card.dart';
 import 'registration/registration_menu.dart';
-import '../services/db_helper.dart';
+import '../services/menu_settings_service.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:async';
+import 'admin_settings.dart';
+import 'daily_summary.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  // Secret Developer Mode variables
+  int _logoTapCount = 0;
+  Timer? _tapTimer;
+  
+  // Menu visibility states
+  bool _whiteRobeEnabled = false;
+  bool _bookingEnabled = false;
+  bool _scheduleEnabled = true;
+  bool _summaryEnabled = true;
+
   void _showWip(BuildContext ctx) => ScaffoldMessenger.of(ctx).showSnackBar(
-    const SnackBar(content: Text('ฟังก์ชันนี้อยู่ระหว่างการพัฒนา')),
+    const SnackBar(
+      content: Text(
+        'ฟังก์ชันนี้อยู่ระหว่างการพัฒนา',
+        style: TextStyle(fontSize: 14),
+      ),
+      behavior: SnackBarBehavior.floating,
+      margin: EdgeInsets.all(16),
+    ),
   );
 
-  Future<void> _clearDatabase(BuildContext context) async {
-    try {
-      final dbHelper = DbHelper();
-      await dbHelper.clearAllData();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ล้างข้อมูลฐานข้อมูลเรียบร้อยแล้ว')),
-        );
+  // Secret Developer Mode activation
+  void _onLogoTap() {
+    _logoTapCount++;
+    
+    // Reset timer if it exists
+    _tapTimer?.cancel();
+    
+    // Start new timer - reset count after 5 seconds
+    _tapTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) {
+        setState(() {
+          _logoTapCount = 0;
+        });
       }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
-      }
+    });
+    
+    // Check if reached 12 taps
+    if (_logoTapCount >= 12) {
+      _activateSecretMode();
     }
+  }
+
+  void _activateSecretMode() {
+    _logoTapCount = 0; // Reset counter
+    _tapTimer?.cancel();
+    
+    // Show toast message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(
+              Icons.admin_panel_settings,
+              color: Colors.white,
+              size: 24,
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Secret Developer Mode unlocked!',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.purple,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    
+    // Navigate to Admin Settings after a short delay
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        _navigateToAdminSettings();
+      }
+    });
+  }
+
+  void _navigateToAdminSettings() async {
+    // Navigate to Admin Settings screen
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AdminSettings()),
+    );
+    
+    // Refresh menu settings when returning from Admin Settings
+    _loadMenuSettings();
+  }
+
+  @override
+  void dispose() {
+    _tapTimer?.cancel();
+    super.dispose();
+  }
+
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMenuSettings();
+  }
+  
+  Future<void> _loadMenuSettings() async {
+    final menuService = MenuSettingsService();
+    final whiteRobeEnabled = await menuService.isWhiteRobeEnabled;
+    final bookingEnabled = await menuService.isBookingEnabled;
+    final scheduleEnabled = await menuService.isScheduleEnabled;
+    final summaryEnabled = await menuService.isSummaryEnabled;
+    
+    debugPrint('Loading menu settings:');
+    debugPrint('White Robe: $whiteRobeEnabled');
+    debugPrint('Booking: $bookingEnabled');
+    debugPrint('Schedule: $scheduleEnabled');
+    debugPrint('Summary: $summaryEnabled');
+    
+    setState(() {
+      _whiteRobeEnabled = whiteRobeEnabled;
+      _bookingEnabled = bookingEnabled;
+      _scheduleEnabled = scheduleEnabled;
+      _summaryEnabled = summaryEnabled;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final items = [
+    // Build menu items based on visibility settings
+    final List<Map<String, dynamic>> allItems = [
       {
         'label': 'ลงทะเบียน',
         'icon': Icons.app_registration,
+        'enabled': true, // Always enabled
         'onTap': () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const RegistrationMenu()),
@@ -44,6 +154,7 @@ class HomeScreen extends StatelessWidget {
       {
         'label': 'เบิกชุดขาว',
         'icon': Icons.checkroom,
+        'enabled': _whiteRobeEnabled,
         'onTap': () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const WhiteRobeScanner()),
@@ -52,51 +163,89 @@ class HomeScreen extends StatelessWidget {
       {
         'label': 'จองที่พัก',
         'icon': Icons.bed_outlined,
+        'enabled': _bookingEnabled,
         'onTap': () => _showWip(context),
       },
       {
         'label': 'ตารางกิจกรรม',
         'icon': Icons.event_note,
+        'enabled': _scheduleEnabled,
         'onTap': () => _showWip(context),
       },
       {
         'label': 'สรุปผลประจำวัน',
         'icon': Icons.bar_chart,
-        'onTap': () => _showWip(context),
+        'enabled': _summaryEnabled,
+        'onTap': () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const DailySummaryScreen()),
+        ),
       },
     ];
+    
+    // Filter items to only show enabled ones
+    final items = allItems.where((item) => item['enabled'] == true).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6FAF7), // สีพื้นหลังอ่อน
       appBar: AppBar(
-        title: Row(
-          children: [
-            Icon(
-              Icons.spa,
-              color: Colors.purple,
-              size: 32,
-            ), // เปลี่ยนเป็นสีม่วง
-            const SizedBox(width: 8),
-            const Text(
-              'บ้านเพชรบำเพ็ญ',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
-            ),
-          ],
+        title: GestureDetector(
+          onTap: _onLogoTap,
+          child: Row(
+            children: [
+              Icon(
+                Icons.spa,
+                color: Colors.purple,
+                size: 32,
+              ), // โลโก้เดิม
+              const SizedBox(width: 8),
+              const Text(
+                'บ้านเพชรบำเพ็ญ',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+              ),
+              // Show tap count for debugging in debug mode
+              if (kDebugMode && _logoTapCount > 0) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.orange,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$_logoTapCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
         backgroundColor: Colors.white,
         elevation: 2,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Expanded(
-              child: GridView.count(
-                crossAxisCount: 2,
-                mainAxisSpacing: 20,
-                crossAxisSpacing: 20,
-                childAspectRatio: 1.1,
-                shrinkWrap: true,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  // Responsive grid based on screen width
+                  final screenWidth = constraints.maxWidth;
+                  final crossAxisCount = screenWidth < 600 ? 2 : 3;
+                  final childAspectRatio = screenWidth < 400 ? 0.9 : 1.1;
+                  
+                  return GridView.count(
+                    crossAxisCount: crossAxisCount,
+                    mainAxisSpacing: 16,
+                    crossAxisSpacing: 16,
+                    childAspectRatio: childAspectRatio,
+                    shrinkWrap: true,
                 children: items.map((item) {
                   return InkWell(
                     borderRadius: BorderRadius.circular(20),
@@ -107,23 +256,27 @@ class HomeScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(12),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               item['icon'] as IconData,
-                              size: 40,
+                              size: screenWidth < 400 ? 32 : 40,
                               color: Colors.purple,
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              item['label'] as String,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
+                            SizedBox(height: screenWidth < 400 ? 8 : 12),
+                            Flexible(
+                              child: Text(
+                                item['label'] as String,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: screenWidth < 400 ? 13 : 16,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              textAlign: TextAlign.center,
                             ),
                           ],
                         ),
@@ -131,33 +284,10 @@ class HomeScreen extends StatelessWidget {
                     ),
                   );
                 }).toList(),
+                  );
+                },
               ),
             ),
-            // เพิ่มปุ่มทดสอบสำหรับ Debug
-            if (kDebugMode) ...[
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.bug_report),
-                  label: const Text('ทดสอบระบบ'),
-                  onPressed: () async {
-                    final dbHelper = DbHelper();
-                    await dbHelper.createTestData();
-                    await dbHelper.debugPrintAllData();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'สร้างข้อมูลทดสอบแล้ว ดู Console สำหรับรายละเอียด',
-                          ),
-                        ),
-                      );
-                    }
-                  },
-                ),
-              ),
-            ],
           ],
         ),
       ),

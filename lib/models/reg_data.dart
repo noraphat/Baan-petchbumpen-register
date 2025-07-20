@@ -335,3 +335,96 @@ class AddressInfo {
     return parts.join(', ');
   }
 }
+
+// คลาสสำหรับจัดการข้อมูลการเข้าพัก
+class StayRecord {
+  final int? id;
+  final String visitorId;       // เชื่อมกับ RegData.id
+  final DateTime startDate;     // วันที่เริ่มพัก
+  final DateTime endDate;       // วันที่สิ้นสุด
+  final String status;          // 'active', 'extended', 'completed'
+  final String? note;           // หมายเหตุ
+  final DateTime createdAt;     // วันที่สร้างข้อมูล
+
+  StayRecord({
+    this.id,
+    required this.visitorId,
+    required this.startDate,
+    required this.endDate,
+    this.status = 'active',
+    this.note,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'visitor_id': visitorId,
+        'start_date': startDate.toIso8601String(),
+        'end_date': endDate.toIso8601String(),
+        'status': status,
+        'note': note,
+        'created_at': createdAt.toIso8601String(),
+      };
+
+  factory StayRecord.fromMap(Map<String, dynamic> m) => StayRecord(
+        id: m['id'],
+        visitorId: m['visitor_id'],
+        startDate: DateTime.parse(m['start_date']),
+        endDate: DateTime.parse(m['end_date']),
+        status: m['status'] ?? 'active',
+        note: m['note'],
+        createdAt: DateTime.parse(m['created_at']),
+      );
+
+  // สร้าง Stay record ใหม่
+  factory StayRecord.create({
+    required String visitorId,
+    required DateTime startDate,
+    required DateTime endDate,
+    String status = 'active',
+    String? note,
+  }) => StayRecord(
+        visitorId: visitorId,
+        startDate: startDate,
+        endDate: endDate,
+        status: status,
+        note: note,
+        createdAt: DateTime.now(),
+      );
+
+  // อัพเดต Stay record
+  StayRecord copyWith({
+    DateTime? startDate,
+    DateTime? endDate,
+    String? status,
+    String? note,
+  }) => StayRecord(
+        id: id,
+        visitorId: visitorId,
+        startDate: startDate ?? this.startDate,
+        endDate: endDate ?? this.endDate,
+        status: status ?? this.status,
+        note: note ?? this.note,
+        createdAt: createdAt,
+      );
+
+  // ตรวจสอบว่า stay ยังคง active อยู่หรือไม่
+  bool get isActive {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
+    
+    // Stay ถือว่า active ถ้า endDate >= วันนี้ (รวมวันเดียวกัน)
+    return endDateOnly.isAfter(today) || endDateOnly.isAtSameMomentAs(today);
+  }
+
+  // ตรวจสอบว่า stay หมดอายุแล้วหรือไม่
+  bool get isExpired {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final endDateOnly = DateTime(endDate.year, endDate.month, endDate.day);
+    
+    // Stay หมดอายุถ้า endDate < วันนี้
+    return endDateOnly.isBefore(today);
+  }
+}

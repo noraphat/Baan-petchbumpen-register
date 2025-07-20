@@ -18,7 +18,7 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'dhamma_reg.db');
     return openDatabase(
       path,
-      version: 3, // เพิ่มเวอร์ชันเพื่ออัปเดตฐานข้อมูล
+      version: 4, // เพิ่มเวอร์ชันเพื่ออัปเดตฐานข้อมูล
       onCreate: (db, _) async {
         // ตารางข้อมูลหลัก
         await db.execute('''
@@ -56,6 +56,24 @@ class DbHelper {
             FOREIGN KEY (regId) REFERENCES regs (id) ON DELETE CASCADE
           )
         ''');
+
+        // ตาราง stays (การพำนักแต่ละครั้ง)
+        await db.execute('''
+          CREATE TABLE stays (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            status TEXT DEFAULT 'active',
+            note TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (visitor_id) REFERENCES regs (id) ON DELETE CASCADE
+          )
+        ''');
+
+        // สร้าง indexes
+        await db.execute('CREATE INDEX idx_stays_visitor_id ON stays(visitor_id)');
+        await db.execute('CREATE INDEX idx_stays_date_range ON stays(start_date, end_date)');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -95,6 +113,26 @@ class DbHelper {
             'UPDATE regs SET hasIdCard = 0, createdAt = ?, updatedAt = ?',
             [now, now],
           );
+        }
+
+        if (oldVersion < 4) {
+          // เพิ่มตาราง stays
+          await db.execute('''
+            CREATE TABLE stays (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              visitor_id TEXT NOT NULL,
+              start_date TEXT NOT NULL,
+              end_date TEXT NOT NULL,
+              status TEXT DEFAULT 'active',
+              note TEXT,
+              created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+              FOREIGN KEY (visitor_id) REFERENCES regs (id) ON DELETE CASCADE
+            )
+          ''');
+
+          // สร้าง indexes
+          await db.execute('CREATE INDEX idx_stays_visitor_id ON stays(visitor_id)');
+          await db.execute('CREATE INDEX idx_stays_date_range ON stays(start_date, end_date)');
         }
       },
     );
@@ -266,5 +304,120 @@ class DbHelper {
       }
       print('==================');
     }
+  }
+
+  // =================== STAY MANAGEMENT METHODS ===================
+
+  // ดึงข้อมูล Stay ล่าสุดของผู้เข้าพัก
+  Future<StayRecord?> fetchLatestStay(String visitorId) async {
+    final res = await (await db).query(
+      'stays',
+      where: 'visitor_id = ?',
+      whereArgs: [visitorId],
+      orderBy: 'created_at DESC',
+      limit: 1,
+    );
+    return res.isEmpty ? null : StayRecord.fromMap(res.first);
+  }
+
+  // ดึงข้อมูล Stay ทั้งหมดของผู้เข้าพัก
+  Future<List<StayRecord>> fetchAllStays(String visitorId) async {
+    final res = await (await db).query(
+      'stays',
+      where: 'visitor_id = ?',
+      whereArgs: [visitorId],
+      orderBy: 'created_at DESC',
+    );
+    return res.map((m) => StayRecord.fromMap(m)).toList();
+  }
+
+  // ดึงข้อมูล Stay ที่ยัง active
+  Future<List<StayRecord>> fetchActiveStays(String visitorId) async {
+    final now = DateTime.now().toIso8601String();
+    final res = await (await db).query(
+      'stays',
+      where: 'visitor_id = ? AND end_date >= ?',
+      whereArgs: [visitorId, now],
+      orderBy: 'created_at DESC',
+    );
+    return res.map((m) => StayRecord.fromMap(m)).toList();
+  }
+
+  // เพิ่ม Stay record ใหม่
+  Future<int> insertStay(StayRecord stay) async {
+    return await (await db).insert('stays', stay.toMap());
+  }
+
+  // อัพเดต Stay record
+  Future<void> updateStay(StayRecord stay) async {
+    await (await db).update(
+      'stays',
+      stay.toMap(),
+      where: 'id = ?',
+      whereArgs: [stay.id],
+    );
+  }
+
+  // ลบ Stay record
+  Future<void> deleteStay(int stayId) async {
+    await (await db).delete('stays', where: 'id = ?', whereArgs: [stayId]);
+  }
+
+  // ตรวจสอบสถานะการเข้าพักปัจจุบัน
+  Future<Map<String, dynamic>> checkStayStatus(String visitorId) async {
+    final latestStay = await fetchLatestStay(visitorId);
+
+    if (latestStay == null) {
+      return {
+        'hasStay': false,
+        'isActive': false,
+        'canCreateNew': true,
+        'latestStay': null,
+      };
+    }
+
+    // ใช้ isActive method ที่แก้ไขแล้ว
+    final isActive = latestStay.isActive;
+
+    return {
+      'hasStay': true,
+      'isActive': isActive,
+      'canCreateNew': !isActive,
+      'latestStay': latestStay,
+    };
+  }
+
+  // อัพเดตสถานะ Stay เป็น completed
+  Future<void> completeStay(int stayId) async {
+    await (await db).update(
+      'stays',
+      {'status': 'completed'},
+      where: 'id = ?',
+      whereArgs: [stayId],
+    );
+  }
+
+  // ตรวจสอบว่ามีการจองซ้อนทับหรือไม่
+  Future<bool> hasOverlappingStay(String visitorId, DateTime startDate, DateTime endDate, {int? excludeStayId}) async {
+    String whereClause = 'visitor_id = ? AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND start_date <= ?))';
+    List<dynamic> whereArgs = [
+      visitorId,
+      startDate.toIso8601String(), startDate.toIso8601String(),
+      endDate.toIso8601String(), endDate.toIso8601String(),
+      startDate.toIso8601String(), endDate.toIso8601String(),
+    ];
+
+    if (excludeStayId != null) {
+      whereClause += ' AND id != ?';
+      whereArgs.add(excludeStayId);
+    }
+
+    final res = await (await db).query(
+      'stays',
+      where: whereClause,
+      whereArgs: whereArgs,
+    );
+
+    return res.isNotEmpty;
   }
 }

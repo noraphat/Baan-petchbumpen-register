@@ -1,0 +1,1 @@
+# โหลด context → ยิง Claude/ChatGPT

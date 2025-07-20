@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../models/reg_data.dart';
 import '../../services/db_helper.dart';
@@ -55,8 +54,6 @@ class _ManualFormState extends State<ManualForm> {
     if (q.length < 5) return;
 
     final old = await DbHelper().fetchById(q);
-    print('DEBUG: old = $old');
-    print('DEBUG: old?.phone = \'${old?.phone}\'');
     if (old == null) {
       setState(() {
         _found = false;
@@ -70,7 +67,9 @@ class _ManualFormState extends State<ManualForm> {
         _selProvId = _selDistId = _selSubId = null;
         _selectedDob = null;
       });
-      FocusScope.of(context).requestFocus(_firstFocus);
+      if (mounted) {
+        FocusScope.of(context).requestFocus(_firstFocus);
+      }
     } else {
       setState(() {
         _found = true;
@@ -81,12 +80,10 @@ class _ManualFormState extends State<ManualForm> {
         try {
           _selectedDob = DateFormat('d MMMM yyyy', 'th_TH').parse(old.dob);
         } catch (e) {
-          print('DEBUG: parse dob error: $e');
           _selectedDob = null;
         }
         dobCtrl.text = old.dob;
-        phoneCtrl.text = (old.phone ?? '').trim();
-        print('DEBUG: phoneCtrl.text (in setState) = \'${phoneCtrl.text}\'');
+        phoneCtrl.text = old.phone.trim();
 
         final addrParts = old.addr.split(RegExp(r',\s*'));
         if (addrParts.length >= 3) {
@@ -149,7 +146,6 @@ class _ManualFormState extends State<ManualForm> {
 
         _gender = old.gender;
       });
-      print('DEBUG: phoneCtrl.text (after setState) = \'${phoneCtrl.text}\'');
       await _showAdditionalInfoDialog(old.id);
     }
   }
@@ -238,8 +234,7 @@ class _ManualFormState extends State<ManualForm> {
               controller: phoneCtrl,
               enabled: true,
               keyboard: TextInputType.phone,
-              onChanged: (v) =>
-                  print('DEBUG: phoneCtrl.text (onChanged in build) = $v'),
+              onChanged: null,
             ),
             DropdownButtonFormField<int>(
               value: _selProvId,
@@ -350,7 +345,6 @@ class _ManualFormState extends State<ManualForm> {
     TextInputType keyboard = TextInputType.text,
     ValueChanged<String>? onChanged,
   }) {
-    print('DEBUG (build): $label = \'${controller.text}\'');
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextFormField(
@@ -420,216 +414,122 @@ class _ManualFormState extends State<ManualForm> {
   }
 
   Future<void> _showAdditionalInfoDialog(String regId) async {
-    DateTime? startDate;
-    DateTime? endDate;
-    final shirtCtrl = TextEditingController();
-    final pantsCtrl = TextEditingController();
-    final matCtrl = TextEditingController();
-    final pillowCtrl = TextEditingController();
-    final blanketCtrl = TextEditingController();
-    final locationCtrl = TextEditingController();
-    final notesCtrl = TextEditingController();
-    bool withChildren = false;
-    final childrenCtrl = TextEditingController();
+    if (!mounted) return;
+    
+    // โหลดข้อมูลเพิ่มเติมที่มีอยู่แล้ว
+    final existingInfo = await DbHelper().fetchAdditionalInfo(regId);
+    
+    if (!mounted) return;
 
-    try {
-      // โหลดข้อมูลเพิ่มเติมที่มีอยู่แล้ว
-      final existingInfo = await DbHelper().fetchAdditionalInfo(regId);
-      if (existingInfo != null) {
-        startDate = existingInfo.startDate;
-        endDate = existingInfo.endDate;
-        shirtCtrl.text = existingInfo.shirtCount?.toString() ?? '0';
-        pantsCtrl.text = existingInfo.pantsCount?.toString() ?? '0';
-        matCtrl.text = existingInfo.matCount?.toString() ?? '0';
-        pillowCtrl.text = existingInfo.pillowCount?.toString() ?? '0';
-        blanketCtrl.text = existingInfo.blanketCount?.toString() ?? '0';
-        locationCtrl.text = existingInfo.location ?? '';
-        withChildren = existingInfo.withChildren;
-        childrenCtrl.text = existingInfo.childrenCount?.toString() ?? '0';
-        notesCtrl.text = existingInfo.notes ?? '';
-      } else {
-        // ตั้งค่าเริ่มต้น
-        shirtCtrl.text = '0';
-        pantsCtrl.text = '0';
-        matCtrl.text = '0';
-        pillowCtrl.text = '0';
-        blanketCtrl.text = '0';
-        childrenCtrl.text = '0';
-      }
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => _AdditionalInfoDialog(
+        regId: regId,
+        existingInfo: existingInfo,
+      ),
+    );
+  }
 
-      await showDialog(
-        context: context,
-        builder: (context) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('ข้อมูลเพิ่มเติม'),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: DateTime.now(),
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2100),
-                            );
-                            if (picked != null)
-                              setDialogState(() => startDate = picked);
-                          },
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: 'วันที่เริ่มต้น',
-                            ),
-                            child: Text(
-                              startDate == null
-                                  ? 'เลือกวันที่'
-                                  : DateFormat('dd/MM/yyyy').format(startDate!),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: startDate ?? DateTime.now(),
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime(2100),
-                            );
-                            if (picked != null)
-                              setDialogState(() => endDate = picked);
-                          },
-                          child: InputDecorator(
-                            decoration: const InputDecoration(
-                              labelText: 'วันที่สิ้นสุด',
-                            ),
-                            child: Text(
-                              endDate == null
-                                  ? 'เลือกวันที่'
-                                  : DateFormat('dd/MM/yyyy').format(endDate!),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  _buildNumberField(
-                    label: 'จำนวนเสื้อขาว',
-                    controller: shirtCtrl,
-                    onDecrease: () => _updateNumberField(shirtCtrl, -1),
-                    onIncrease: () => _updateNumberField(shirtCtrl, 1),
-                  ),
-                  _buildNumberField(
-                    label: 'จำนวนกางเกงขาว',
-                    controller: pantsCtrl,
-                    onDecrease: () => _updateNumberField(pantsCtrl, -1),
-                    onIncrease: () => _updateNumberField(pantsCtrl, 1),
-                  ),
-                  _buildNumberField(
-                    label: 'จำนวนเสื่อ',
-                    controller: matCtrl,
-                    onDecrease: () => _updateNumberField(matCtrl, -1),
-                    onIncrease: () => _updateNumberField(matCtrl, 1),
-                  ),
-                  _buildNumberField(
-                    label: 'จำนวนหมอน',
-                    controller: pillowCtrl,
-                    onDecrease: () => _updateNumberField(pillowCtrl, -1),
-                    onIncrease: () => _updateNumberField(pillowCtrl, 1),
-                  ),
-                  _buildNumberField(
-                    label: 'จำนวนผ้าห่ม',
-                    controller: blanketCtrl,
-                    onDecrease: () => _updateNumberField(blanketCtrl, -1),
-                    onIncrease: () => _updateNumberField(blanketCtrl, 1),
-                  ),
-                  TextFormField(
-                    controller: locationCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'ห้อง/ศาลา/สถานที่พัก',
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: withChildren,
-                        onChanged: (v) =>
-                            setDialogState(() => withChildren = v!),
-                      ),
-                      const Text('มากับเด็ก'),
-                      if (withChildren)
-                        Expanded(
-                          child: _buildNumberField(
-                            label: 'จำนวนเด็ก',
-                            controller: childrenCtrl,
-                            onDecrease: () =>
-                                _updateNumberField(childrenCtrl, -1),
-                            onIncrease: () =>
-                                _updateNumberField(childrenCtrl, 1),
-                          ),
-                        ),
-                    ],
-                  ),
-                  TextFormField(
-                    controller: notesCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'หมายเหตุ',
-                      hintText: 'โรคประจำตัว, ไม่ทานเนื้อสัตว์ ฯลฯ',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () async {
-                  // บันทึกข้อมูลเพิ่มเติมลงฐานข้อมูล
-                  final additionalInfo = RegAdditionalInfo.create(
-                    regId: regId,
-                    startDate: startDate,
-                    endDate: endDate,
-                    shirtCount: int.tryParse(shirtCtrl.text) ?? 0,
-                    pantsCount: int.tryParse(pantsCtrl.text) ?? 0,
-                    matCount: int.tryParse(matCtrl.text) ?? 0,
-                    pillowCount: int.tryParse(pillowCtrl.text) ?? 0,
-                    blanketCount: int.tryParse(blanketCtrl.text) ?? 0,
-                    location: locationCtrl.text.trim(),
-                    withChildren: withChildren,
-                    childrenCount: withChildren
-                        ? (int.tryParse(childrenCtrl.text) ?? 0)
-                        : null,
-                    notes: notesCtrl.text.trim(),
-                  );
 
-                  await DbHelper().insertAdditionalInfo(additionalInfo);
-                  Navigator.of(context).pop();
-                },
-                child: const Text('บันทึก'),
-              ),
-            ],
-          ),
-        ),
-      );
-    } finally {
-      // Dispose controllers เมื่อปิด Dialog
-      shirtCtrl.dispose();
-      pantsCtrl.dispose();
-      matCtrl.dispose();
-      pillowCtrl.dispose();
-      blanketCtrl.dispose();
-      locationCtrl.dispose();
-      notesCtrl.dispose();
-      childrenCtrl.dispose();
+  @override
+  void dispose() {
+    searchCtrl.dispose();
+    firstCtrl.dispose();
+    lastCtrl.dispose();
+    dobCtrl.dispose();
+    phoneCtrl.dispose();
+    addrCtrl.dispose();
+    _firstFocus.dispose();
+    super.dispose();
+  }
+}
+
+class _AdditionalInfoDialog extends StatefulWidget {
+  final String regId;
+  final RegAdditionalInfo? existingInfo;
+
+  const _AdditionalInfoDialog({
+    required this.regId,
+    this.existingInfo,
+  });
+
+  @override
+  State<_AdditionalInfoDialog> createState() => _AdditionalInfoDialogState();
+}
+
+class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
+  DateTime? startDate;
+  DateTime? endDate;
+  late final TextEditingController shirtCtrl;
+  late final TextEditingController pantsCtrl;
+  late final TextEditingController matCtrl;
+  late final TextEditingController pillowCtrl;
+  late final TextEditingController blanketCtrl;
+  late final TextEditingController locationCtrl;
+  late final TextEditingController notesCtrl;
+  late final TextEditingController childrenCtrl;
+  bool withChildren = false;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // สร้าง controllers
+    shirtCtrl = TextEditingController();
+    pantsCtrl = TextEditingController();
+    matCtrl = TextEditingController();
+    pillowCtrl = TextEditingController();
+    blanketCtrl = TextEditingController();
+    locationCtrl = TextEditingController();
+    notesCtrl = TextEditingController();
+    childrenCtrl = TextEditingController();
+    
+    // โหลดข้อมูลที่มีอยู่แล้ว
+    if (widget.existingInfo != null) {
+      final info = widget.existingInfo!;
+      startDate = info.startDate;
+      endDate = info.endDate;
+      shirtCtrl.text = info.shirtCount?.toString() ?? '0';
+      pantsCtrl.text = info.pantsCount?.toString() ?? '0';
+      matCtrl.text = info.matCount?.toString() ?? '0';
+      pillowCtrl.text = info.pillowCount?.toString() ?? '0';
+      blanketCtrl.text = info.blanketCount?.toString() ?? '0';
+      locationCtrl.text = info.location ?? '';
+      withChildren = info.withChildren;
+      childrenCtrl.text = info.childrenCount?.toString() ?? '0';
+      notesCtrl.text = info.notes ?? '';
+    } else {
+      // ตั้งค่าเริ่มต้น
+      shirtCtrl.text = '0';
+      pantsCtrl.text = '0';
+      matCtrl.text = '0';
+      pillowCtrl.text = '0';
+      blanketCtrl.text = '0';
+      childrenCtrl.text = '0';
     }
   }
 
-  // ฟังก์ชันสำหรับสร้าง field ตัวเลขที่มีปุ่ม +/-
+  @override
+  void dispose() {
+    shirtCtrl.dispose();
+    pantsCtrl.dispose();
+    matCtrl.dispose();
+    pillowCtrl.dispose();
+    blanketCtrl.dispose();
+    locationCtrl.dispose();
+    notesCtrl.dispose();
+    childrenCtrl.dispose();
+    super.dispose();
+  }
+
+  void _updateNumberField(TextEditingController controller, int change) {
+    final currentValue = int.tryParse(controller.text) ?? 0;
+    final newValue = (currentValue + change).clamp(0, 9);
+    setState(() {
+      controller.text = newValue.toString();
+    });
+  }
+
   Widget _buildNumberField({
     required String label,
     required TextEditingController controller,
@@ -690,25 +590,178 @@ class _ManualFormState extends State<ManualForm> {
     );
   }
 
-  // ฟังก์ชันสำหรับอัปเดตค่าใน field ตัวเลข
-  void _updateNumberField(TextEditingController controller, int change) {
-    final currentValue = int.tryParse(controller.text) ?? 0;
-    final newValue = (currentValue + change).clamp(
-      0,
-      9,
-    ); // จำกัดค่าอยู่ระหว่าง 0-9
-    controller.text = newValue.toString();
-  }
-
   @override
-  void dispose() {
-    searchCtrl.dispose();
-    firstCtrl.dispose();
-    lastCtrl.dispose();
-    dobCtrl.dispose();
-    phoneCtrl.dispose();
-    addrCtrl.dispose();
-    _firstFocus.dispose();
-    super.dispose();
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('ข้อมูลเพิ่มเติม'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null && mounted) {
+                        setState(() => startDate = picked);
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'วันที่เริ่มต้น',
+                      ),
+                      child: Text(
+                        startDate == null
+                            ? 'เลือกวันที่'
+                            : DateFormat('dd/MM/yyyy').format(startDate!),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: startDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked != null && mounted) {
+                        setState(() => endDate = picked);
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'วันที่สิ้นสุด',
+                      ),
+                      child: Text(
+                        endDate == null
+                            ? 'เลือกวันที่'
+                            : DateFormat('dd/MM/yyyy').format(endDate!),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            _buildNumberField(
+              label: 'จำนวนเสื้อขาว',
+              controller: shirtCtrl,
+              onDecrease: () => _updateNumberField(shirtCtrl, -1),
+              onIncrease: () => _updateNumberField(shirtCtrl, 1),
+            ),
+            _buildNumberField(
+              label: 'จำนวนกางเกงขาว',
+              controller: pantsCtrl,
+              onDecrease: () => _updateNumberField(pantsCtrl, -1),
+              onIncrease: () => _updateNumberField(pantsCtrl, 1),
+            ),
+            _buildNumberField(
+              label: 'จำนวนเสื่อ',
+              controller: matCtrl,
+              onDecrease: () => _updateNumberField(matCtrl, -1),
+              onIncrease: () => _updateNumberField(matCtrl, 1),
+            ),
+            _buildNumberField(
+              label: 'จำนวนหมอน',
+              controller: pillowCtrl,
+              onDecrease: () => _updateNumberField(pillowCtrl, -1),
+              onIncrease: () => _updateNumberField(pillowCtrl, 1),
+            ),
+            _buildNumberField(
+              label: 'จำนวนผ้าห่ม',
+              controller: blanketCtrl,
+              onDecrease: () => _updateNumberField(blanketCtrl, -1),
+              onIncrease: () => _updateNumberField(blanketCtrl, 1),
+            ),
+            TextFormField(
+              controller: locationCtrl,
+              decoration: const InputDecoration(
+                labelText: 'ห้อง/ศาลา/สถานที่พัก',
+              ),
+            ),
+            Row(
+              children: [
+                Checkbox(
+                  value: withChildren,
+                  onChanged: (v) => setState(() => withChildren = v ?? false),
+                ),
+                const Text('มากับเด็ก'),
+              ],
+            ),
+            if (withChildren) ...[
+              const SizedBox(height: 8),
+              _buildNumberField(
+                label: 'จำนวนเด็ก',
+                controller: childrenCtrl,
+                onDecrease: () => _updateNumberField(childrenCtrl, -1),
+                onIncrease: () => _updateNumberField(childrenCtrl, 1),
+              ),
+            ],
+            TextFormField(
+              controller: notesCtrl,
+              decoration: const InputDecoration(
+                labelText: 'หมายเหตุ',
+                hintText: 'โรคประจำตัว, ไม่ทานเนื้อสัตว์ ฯลฯ',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () async {
+            // บันทึกข้อมูลเพิ่มเติมลงฐานข้อมูล
+            final additionalInfo = RegAdditionalInfo.create(
+              regId: widget.regId,
+              startDate: startDate,
+              endDate: endDate,
+              shirtCount: int.tryParse(shirtCtrl.text) ?? 0,
+              pantsCount: int.tryParse(pantsCtrl.text) ?? 0,
+              matCount: int.tryParse(matCtrl.text) ?? 0,
+              pillowCount: int.tryParse(pillowCtrl.text) ?? 0,
+              blanketCount: int.tryParse(blanketCtrl.text) ?? 0,
+              location: locationCtrl.text.trim(),
+              withChildren: withChildren,
+              childrenCount: withChildren
+                  ? (int.tryParse(childrenCtrl.text) ?? 0)
+                  : null,
+              notes: notesCtrl.text.trim(),
+            );
+
+            try {
+              await DbHelper().insertAdditionalInfo(additionalInfo);
+              if (context.mounted) {
+                Navigator.of(context).pop();
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+                );
+              }
+            }
+          },
+          child: const Text('บันทึก'),
+        ),
+        TextButton(
+          onPressed: () {
+            if (context.mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+          child: const Text('ยกเลิก'),
+        ),
+      ],
+    );
   }
 }

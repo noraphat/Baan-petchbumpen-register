@@ -7,7 +7,7 @@ import 'package:sunmi_printer_plus/sunmi_style.dart';
 import '../models/reg_data.dart';
 
 class PrinterService {
-  Future<void> printReceipt(RegData data) async {
+  Future<void> printReceipt(RegData data, {RegAdditionalInfo? additionalInfo, StayRecord? stayRecord}) async {
     final bool bound = (await SunmiPrinter.bindingPrinter()) ?? false;
     if (!bound) return;
 
@@ -69,13 +69,110 @@ class PrinterService {
       ),
     );
 
-    // 🔷 QR Code (ใช้ ID)
+    // 🔷 ข้อมูลวันที่เข้าพัก (ถ้ามี)
+    if (stayRecord != null) {
+      await SunmiPrinter.lineWrap(1);
+      await SunmiPrinter.setAlignment(SunmiPrintAlign.CENTER);
+      
+      // แปลงวันที่เป็นรูปแบบภาษาไทย
+      final startDateThai = _formatDateThai(stayRecord.startDate);
+      final endDateThai = _formatDateThai(stayRecord.endDate);
+      
+      // คำนวณจำนวนวัน
+      final daysDiff = stayRecord.endDate.difference(stayRecord.startDate).inDays + 1;
+      
+      if (stayRecord.startDate.day == stayRecord.endDate.day &&
+          stayRecord.startDate.month == stayRecord.endDate.month &&
+          stayRecord.startDate.year == stayRecord.endDate.year) {
+        // กรณีเข้าพักวันเดียว
+        await SunmiPrinter.printText(
+          'วันที่เข้าพัก-วันที่สิ้นสุด: $startDateThai',
+          style: SunmiStyle(
+            fontSize: SunmiFontSize.SM,
+            align: SunmiPrintAlign.CENTER,
+          ),
+        );
+      } else {
+        // กรณีเข้าพักหลายวัน
+        await SunmiPrinter.printText(
+          'วันที่เข้าพัก: $startDateThai',
+          style: SunmiStyle(
+            fontSize: SunmiFontSize.SM,
+            align: SunmiPrintAlign.CENTER,
+          ),
+        );
+        await SunmiPrinter.printText(
+          'วันที่สิ้นสุด: $endDateThai',
+          style: SunmiStyle(
+            fontSize: SunmiFontSize.SM,
+            align: SunmiPrintAlign.CENTER,
+          ),
+        );
+      }
+      
+      await SunmiPrinter.printText(
+        'จำนวนวันที่เข้าพัก: $daysDiff วัน',
+        style: SunmiStyle(
+          fontSize: SunmiFontSize.SM,
+          bold: true,
+          align: SunmiPrintAlign.CENTER,
+        ),
+      );
+    }
+
+    // 🔷 รายการอุปกรณ์ที่รับ
     await SunmiPrinter.lineWrap(1);
+    await SunmiPrinter.setAlignment(SunmiPrintAlign.LEFT);
+    
+    await SunmiPrinter.printText(
+      'อุปกรณ์ที่รับ:',
+      style: SunmiStyle(
+        fontSize: SunmiFontSize.MD,
+        bold: true,
+        align: SunmiPrintAlign.LEFT,
+      ),
+    );
+    
+    // แสดงจำนวนอุปกรณ์จาก additionalInfo หรือใช้ค่าเริ่มต้น
+    final shirtCount = additionalInfo?.shirtCount ?? 0;
+    final pantsCount = additionalInfo?.pantsCount ?? 0;
+    final matCount = additionalInfo?.matCount ?? 0;
+    final pillowCount = additionalInfo?.pillowCount ?? 0;
+    final blanketCount = additionalInfo?.blanketCount ?? 0;
+    
+    String equipmentList = '';
+    if (shirtCount > 0) equipmentList += '• เสื้อ $shirtCount ตัว\n';
+    if (pantsCount > 0) equipmentList += '• กางเกง $pantsCount ตัว\n';
+    if (matCount > 0) equipmentList += '• เสื่อ $matCount ผืน\n';
+    if (pillowCount > 0) equipmentList += '• หมอน $pillowCount ใบ\n';
+    if (blanketCount > 0) equipmentList += '• ผ้าห่ม $blanketCount ผืน\n';
+    
+    // ถ้าไม่มีอุปกรณ์ใดเลย ให้แสดงรายการทั่วไป
+    if (equipmentList.isEmpty) {
+      equipmentList = '• เสื้อ\n• กางเกง\n• เสื่อ\n• หมอน\n• ผ้าห่ม';
+    } else {
+      // ลบ \n ตัวสุดท้าย
+      equipmentList = equipmentList.trim();
+    }
+    
+    await SunmiPrinter.printText(
+      equipmentList,
+      style: SunmiStyle(
+        fontSize: SunmiFontSize.SM,
+        align: SunmiPrintAlign.LEFT,
+      ),
+    );
+    
+    // QR Code
+    await SunmiPrinter.lineWrap(1);
+    await SunmiPrinter.setAlignment(SunmiPrintAlign.CENTER);
     await SunmiPrinter.printQRCode(
       data.id,
-      size: 8,
+      size: 7,
     );
-    await SunmiPrinter.lineWrap(1);
+    
+    await SunmiPrinter.lineWrap(2);
+    await SunmiPrinter.setAlignment(SunmiPrintAlign.CENTER);
 
     // 🔷 ข้อความขอรับชุดขาว
     await SunmiPrinter.printText(
@@ -92,4 +189,17 @@ class PrinterService {
     await SunmiPrinter.unbindingPrinter();
   }
 
+  // ฟังก์ชันแปลงวันที่เป็นภาษาไทย
+  String _formatDateThai(DateTime date) {
+    const List<String> thaiMonths = [
+      'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 
+      'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม',
+      'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+    ];
+    
+    final buddhistYear = date.year + 543;
+    final monthName = thaiMonths[date.month - 1];
+    
+    return '${date.day} $monthName $buddhistYear';
+  }
 }

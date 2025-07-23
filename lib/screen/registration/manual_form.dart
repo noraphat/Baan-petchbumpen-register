@@ -487,7 +487,7 @@ class _ManualFormState extends State<ManualForm> {
                 label: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   child: Text(
-                    _found ? 'ลงทะเบียน' : 'ค้นหา',
+                    _found ? 'ลงทะเบียน' : 'ดำเนินการต่อ',
                     key: ValueKey<bool>(_found),
                   ),
                 ),
@@ -831,6 +831,7 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
 
     try {
       // บันทึกหรืออัพเดต Stay record
+      StayRecord? stayRecordForPrint;
       if (widget.canCreateNew) {
         // สร้าง Stay ใหม่
         final newStay = StayRecord.create(
@@ -840,6 +841,7 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
           note: notesCtrl.text.trim(),
         );
         await DbHelper().insertStay(newStay);
+        stayRecordForPrint = newStay;
       } else if (widget.latestStay != null) {
         // อัพเดต Stay ที่มีอยู่
         final updatedStay = widget.latestStay!.copyWith(
@@ -848,6 +850,7 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
           note: notesCtrl.text.trim(),
         );
         await DbHelper().updateStay(updatedStay);
+        stayRecordForPrint = updatedStay;
       }
 
       // บันทึกข้อมูลอุปกรณ์ (ไม่เก็บ startDate/endDate ใน additional_info เพราะย้ายไป stays table แล้ว)
@@ -877,7 +880,11 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
         // สร้าง QR Code จากข้อมูลการเข้าพัก และพิมพ์ใบเสร็จ
         final regData = await DbHelper().fetchById(widget.regId);
         if (regData != null) {
-          await PrinterService().printReceipt(regData);
+          await PrinterService().printReceipt(
+            regData,
+            additionalInfo: additionalInfo,
+            stayRecord: stayRecordForPrint,
+          );
         }
       }
       // ถ้าเมนูเบิกชุดขาวปิดอยู่ ไม่ต้องพิมพ์ใบเสร็จ

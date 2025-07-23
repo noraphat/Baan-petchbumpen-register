@@ -1,0 +1,148 @@
+name: 🧪 Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: 🧪 Run Tests
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📚 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: ☕ Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+        
+    - name: 🐦 Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.0'
+        channel: 'stable'
+        cache: true
+        
+    - name: 📦 Install dependencies
+      run: flutter pub get
+      
+    - name: 🔍 Verify formatting
+      run: dart format --set-exit-if-changed .
+      
+    - name: 📊 Analyze code
+      run: flutter analyze
+      
+    - name: 🧪 Run unit tests
+      run: flutter test --coverage --test-randomize-ordering-seed random
+      
+    - name: 🎨 Run widget tests
+      run: flutter test test/widgets/ --coverage
+      
+    - name: 🖼️ Run golden tests
+      run: flutter test test/golden/
+      
+    - name: 📈 Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: coverage/lcov.info
+        flags: unittests
+        name: flutter-tests
+        fail_ci_if_error: false
+        
+    - name: 📊 Generate coverage report
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lcov
+        genhtml coverage/lcov.info -o coverage/html
+        
+    - name: 📤 Upload coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage/html/
+        
+    - name: 🏗️ Test build
+      run: flutter build apk --debug
+
+  integration:
+    name: 🔄 Integration Tests
+    runs-on: macos-latest
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[integration]')
+    
+    steps:
+    - name: 📚 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐦 Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.0'
+        channel: 'stable'
+        cache: true
+        
+    - name: 📦 Install dependencies
+      run: flutter pub get
+      
+    - name: 🎯 Start iOS Simulator
+      run: |
+        xcrun simctl boot "iPhone 15" || xcrun simctl boot "$(xcrun simctl list devices | grep iPhone | head -n 1 | grep -o '[0-9A-F-]\{36\}')"
+        
+    - name: 🔄 Run integration tests
+      run: |
+        flutter drive \
+          --driver=test_driver/integration_test.dart \
+          --target=integration_test/registration_flow_test.dart
+        flutter drive \
+          --driver=test_driver/integration_test.dart \
+          --target=integration_test/white_robe_flow_test.dart
+
+  performance:
+    name: 🚀 Performance Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: 📚 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🐦 Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.0'
+        channel: 'stable'
+        cache: true
+        
+    - name: 📦 Install dependencies
+      run: flutter pub get
+      
+    - name: 📏 Analyze bundle size
+      run: |
+        flutter build apk --analyze-size --target-platform android-arm64
+        
+    - name: 🔍 Check for performance issues
+      run: |
+        flutter analyze --suggestions
+        
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 📚 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔒 Run security scan
+      run: |
+        # Check for sensitive data in code
+        grep -r "password\|secret\|key\|token" lib/ || true
+        grep -r "TODO\|FIXME\|HACK" lib/ || true
+        
+    - name: 📋 Dependency check
+      run: |
+        flutter pub deps | grep -E "(outdated|discontinued)" || true

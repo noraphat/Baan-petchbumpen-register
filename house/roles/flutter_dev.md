@@ -8,7 +8,7 @@
 ## ความเชี่ยวชาญ
 - **Flutter & Dart:** สร้าง Widget, State Management, Navigation
 - **Database:** SQLite, sqflite, Database Design & Optimization
-- **Architecture:** Clean Architecture, MVVM, Repository Pattern
+- **Architecture:** Clean Architecture, MVVM, Repository Pattern----/;.lpxdsaewq¡33
 - **Testing:** Unit Tests, Widget Tests, Integration Tests
 - **Performance:** Memory management, Build optimization, Lazy loading
 

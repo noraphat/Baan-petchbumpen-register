@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'dart:convert';
 import '../../models/reg_data.dart';
 import '../../services/db_helper.dart';
 import '../../services/address_service.dart';
+import '../../services/menu_settings_service.dart';
+import '../../services/printer_service.dart';
 import '../../widgets/buddhist_calendar_picker.dart';
 
 class ManualForm extends StatefulWidget {
@@ -38,7 +41,7 @@ class _ManualFormState extends State<ManualForm> {
   final _firstFocus = FocusNode();
 
   DateTime? _selectedDob;
-  
+
   // Thai National ID validation
   String? _idValidationMessage;
   bool _isIdValid = true;
@@ -58,25 +61,25 @@ class _ManualFormState extends State<ManualForm> {
   // Thai National ID validation algorithm
   bool _validateThaiNationalId(String id) {
     if (id.length != 13) return false;
-    
+
     // ตรวจสอบว่าเป็นตัวเลขทั้งหมด
     if (!RegExp(r'^\d{13}$').hasMatch(id)) return false;
-    
+
     // คำนวณ checksum
     int sum = 0;
     for (int i = 0; i < 12; i++) {
       sum += int.parse(id[i]) * (13 - i);
     }
-    
+
     int remainder = sum % 11;
     int checkDigit = (11 - remainder) % 10;
-    
+
     return checkDigit == int.parse(id[12]);
   }
 
   void _validateIdWithDelay(String value) {
     _validationTimer?.cancel();
-    
+
     if (value.isEmpty) {
       setState(() {
         _idValidationMessage = null;
@@ -84,14 +87,14 @@ class _ManualFormState extends State<ManualForm> {
       });
       return;
     }
-    
+
     _validationTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
         final isValid = _validateThaiNationalId(value);
         setState(() {
           _isIdValid = isValid;
-          _idValidationMessage = isValid 
-              ? null 
+          _idValidationMessage = isValid
+              ? null
               : 'โปรดตรวจสอบหมายเลขบัตรประชาชนอีกครั้ง';
         });
       }
@@ -119,7 +122,7 @@ class _ManualFormState extends State<ManualForm> {
         _selProvId = _selDistId = _selSubId = null;
         _selectedDob = null;
       });
-      
+
       // แสดง AlertDialog เตือนผู้ใช้
       if (mounted) {
         await showDialog(
@@ -128,11 +131,15 @@ class _ManualFormState extends State<ManualForm> {
           builder: (context) => AlertDialog(
             title: Row(
               children: [
-                const Icon(Icons.warning_amber_outlined, color: Colors.orange, size: 24),
+                const Icon(
+                  Icons.warning_amber_outlined,
+                  color: Colors.orange,
+                  size: 24,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'หมายเลขบัตรประชาชนไม่ถูกต้อง', 
+                    'หมายเลขบัตรประชาชนไม่ถูกต้อง',
                     style: TextStyle(color: Colors.orange),
                   ),
                 ),
@@ -284,19 +291,25 @@ class _ManualFormState extends State<ManualForm> {
                     ),
                     border: OutlineInputBorder(
                       borderSide: BorderSide(
-                        color: _isIdValid ? Colors.grey : Colors.orange.shade300,
+                        color: _isIdValid
+                            ? Colors.grey
+                            : Colors.orange.shade300,
                         width: _isIdValid ? 1.0 : 1.5,
                       ),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderSide: BorderSide(
-                        color: _isIdValid ? Colors.grey : Colors.orange.shade300,
+                        color: _isIdValid
+                            ? Colors.grey
+                            : Colors.orange.shade300,
                         width: _isIdValid ? 1.0 : 1.5,
                       ),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderSide: BorderSide(
-                        color: _isIdValid ? Colors.blue : Colors.orange.shade400,
+                        color: _isIdValid
+                            ? Colors.blue
+                            : Colors.orange.shade400,
                         width: 2.0,
                       ),
                     ),
@@ -532,11 +545,15 @@ class _ManualFormState extends State<ManualForm> {
         builder: (context) => AlertDialog(
           title: Row(
             children: [
-              const Icon(Icons.warning_amber_outlined, color: Colors.orange, size: 24),
+              const Icon(
+                Icons.warning_amber_outlined,
+                color: Colors.orange,
+                size: 24,
+              ),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
-                  'ไม่สามารถบันทึกได้', 
+                  'ไม่สามารถบันทึกได้',
                   style: TextStyle(color: Colors.orange),
                 ),
               ),
@@ -601,15 +618,15 @@ class _ManualFormState extends State<ManualForm> {
 
   Future<void> _showAdditionalInfoDialog(String regId) async {
     if (!mounted) return;
-    
+
     // ตรวจสอบสถานะการเข้าพักปัจจุบัน
     final stayStatus = await DbHelper().checkStayStatus(regId);
     final latestStay = stayStatus['latestStay'] as StayRecord?;
     final canCreateNew = stayStatus['canCreateNew'] as bool;
-    
+
     // โหลดข้อมูลเพิ่มเติมที่มีอยู่แล้ว (equipment info)
     final existingInfo = await DbHelper().fetchAdditionalInfo(regId);
-    
+
     if (!mounted) return;
 
     await showDialog<void>(
@@ -622,7 +639,6 @@ class _ManualFormState extends State<ManualForm> {
       ),
     );
   }
-
 
   @override
   void dispose() {
@@ -671,7 +687,7 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
   @override
   void initState() {
     super.initState();
-    
+
     // สร้าง controllers
     shirtCtrl = TextEditingController();
     pantsCtrl = TextEditingController();
@@ -681,7 +697,7 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
     locationCtrl = TextEditingController();
     notesCtrl = TextEditingController();
     childrenCtrl = TextEditingController();
-    
+
     // โหลดข้อมูลการเข้าพัก - อ่านจาก stays table เสมอ
     if (widget.latestStay != null && !widget.canCreateNew) {
       // กรณีแก้ไขการเข้าพักที่มีอยู่ - ใช้ข้อมูลจาก stays table
@@ -695,7 +711,7 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
       startDate = today;
       endDate = today; // เริ่มต้นเป็นวันเดียวกัน (1 วัน)
     }
-    
+
     // โหลดข้อมูลอุปกรณ์ที่มีอยู่แล้ว
     if (widget.existingInfo != null) {
       final info = widget.existingInfo!;
@@ -707,7 +723,7 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
       locationCtrl.text = info.location ?? '';
       withChildren = info.withChildren;
       childrenCtrl.text = info.childrenCount?.toString() ?? '0';
-      
+
       // หมายเหตุ: ถ้าไม่มี stays record ให้ใช้จาก additional_info
       if (notesCtrl.text.isEmpty && info.notes?.isNotEmpty == true) {
         notesCtrl.text = info.notes!;
@@ -736,7 +752,12 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
     super.dispose();
   }
 
-  void _updateNumberField(TextEditingController controller, int change, {int min = 0, int max = 9}) {
+  void _updateNumberField(
+    TextEditingController controller,
+    int change, {
+    int min = 0,
+    int max = 9,
+  }) {
     final currentValue = int.tryParse(controller.text) ?? min;
     final newValue = (currentValue + change).clamp(min, max);
     setState(() {
@@ -752,7 +773,11 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final startDateOnly = DateTime(startDate!.year, startDate!.month, startDate!.day);
+    final startDateOnly = DateTime(
+      startDate!.year,
+      startDate!.month,
+      startDate!.day,
+    );
     final endDateOnly = DateTime(endDate!.year, endDate!.month, endDate!.day);
 
     // 1. วันที่เริ่มต้น ต้องไม่มากกว่าวันที่ปัจจุบัน
@@ -791,10 +816,7 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
                 const Text('ข้อผิดพลาด', style: TextStyle(color: Colors.red)),
               ],
             ),
-            content: Text(
-              dateValidation,
-              style: const TextStyle(fontSize: 16),
-            ),
+            content: Text(dateValidation, style: const TextStyle(fontSize: 16)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
@@ -832,7 +854,7 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
       final additionalInfo = RegAdditionalInfo.create(
         regId: widget.regId,
         startDate: null, // ไม่เก็บในนี้แล้ว ให้อ่านจาก stays table
-        endDate: null,   // ไม่เก็บในนี้แล้ว ให้อ่านจาก stays table
+        endDate: null, // ไม่เก็บในนี้แล้ว ให้อ่านจาก stays table
         shirtCount: int.tryParse(shirtCtrl.text) ?? 0,
         pantsCount: int.tryParse(pantsCtrl.text) ?? 0,
         matCount: int.tryParse(matCtrl.text) ?? 0,
@@ -848,6 +870,18 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
 
       await DbHelper().insertAdditionalInfo(additionalInfo);
 
+      // ตรวจสอบสถานะเมนูเบิกชุดขาว
+      final isWhiteRobeEnabled = await MenuSettingsService().isWhiteRobeEnabled;
+
+      if (isWhiteRobeEnabled) {
+        // สร้าง QR Code จากข้อมูลการเข้าพัก และพิมพ์ใบเสร็จ
+        final regData = await DbHelper().fetchById(widget.regId);
+        if (regData != null) {
+          await PrinterService().printReceipt(regData);
+        }
+      }
+      // ถ้าเมนูเบิกชุดขาวปิดอยู่ ไม่ต้องพิมพ์ใบเสร็จ
+
       if (mounted) {
         Navigator.of(context).pop();
       }
@@ -861,7 +895,10 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
               children: [
                 const Icon(Icons.error_outline, color: Colors.red, size: 24),
                 const SizedBox(width: 8),
-                const Text('เกิดข้อผิดพลาด', style: TextStyle(color: Colors.red)),
+                const Text(
+                  'เกิดข้อผิดพลาด',
+                  style: TextStyle(color: Colors.red),
+                ),
               ],
             ),
             content: Text(
@@ -943,9 +980,9 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(widget.canCreateNew 
-          ? 'ลงทะเบียนเข้าพักใหม่' 
-          : 'แก้ไขข้อมูลการเข้าพัก'),
+      title: Text(
+        widget.canCreateNew ? 'ลงทะเบียนเข้าพักใหม่' : 'แก้ไขข้อมูลการเข้าพัก',
+      ),
       content: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9, // กำหนดความกว้าง
         child: SingleChildScrollView(
@@ -970,7 +1007,10 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
                       }
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 12,
+                      ),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey),
                         borderRadius: BorderRadius.circular(4),
@@ -993,7 +1033,9 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
                               Text(
                                 startDate == null
                                     ? 'เลือกวันที่'
-                                    : DateFormat('dd/MM/yyyy').format(startDate!),
+                                    : DateFormat(
+                                        'dd/MM/yyyy',
+                                      ).format(startDate!),
                                 style: const TextStyle(fontSize: 16),
                               ),
                             ],
@@ -1019,7 +1061,10 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
                       }
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 12,
+                      ),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey),
                         borderRadius: BorderRadius.circular(4),
@@ -1097,7 +1142,8 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
                   children: [
                     Checkbox(
                       value: withChildren,
-                      onChanged: (v) => setState(() => withChildren = v ?? false),
+                      onChanged: (v) =>
+                          setState(() => withChildren = v ?? false),
                     ),
                     const Text('มากับเด็ก'),
                   ],
@@ -1107,8 +1153,10 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
                   _buildNumberField(
                     label: 'จำนวนเด็ก',
                     controller: childrenCtrl,
-                    onDecrease: () => _updateNumberField(childrenCtrl, -1, min: 1, max: 9),
-                    onIncrease: () => _updateNumberField(childrenCtrl, 1, min: 1, max: 9),
+                    onDecrease: () =>
+                        _updateNumberField(childrenCtrl, -1, min: 1, max: 9),
+                    onIncrease: () =>
+                        _updateNumberField(childrenCtrl, 1, min: 1, max: 9),
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -1127,10 +1175,7 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: _saveStayData,
-          child: const Text('บันทึก'),
-        ),
+        TextButton(onPressed: _saveStayData, child: const Text('บันทึก')),
         TextButton(
           onPressed: () {
             if (context.mounted) {

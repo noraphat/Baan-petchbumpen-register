@@ -13,26 +13,26 @@ void main() {
     });
 
     Widget createTestWidget() {
-      return const MaterialApp(
-        home: HomeScreen(),
-      );
+      return const MaterialApp(home: HomeScreen());
     }
 
     group('UI Rendering', () {
-      testWidgets('should display app bar with correct title and icon', (WidgetTester tester) async {
+      testWidgets('should display app bar with correct title and icon', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
         // Check app bar title
         expect(find.text('บ้านเพชรบำเพ็ญ'), findsOneWidget);
-        
+
         // Check app bar icon
         expect(find.byIcon(Icons.spa), findsOneWidget);
-        
+
         // Check app bar styling
         final appBar = find.byType(AppBar);
         expect(appBar, findsOneWidget);
-        
+
         final appBarWidget = tester.widget<AppBar>(appBar);
         expect(appBarWidget.backgroundColor, equals(Colors.white));
         expect(appBarWidget.elevation, equals(2));
@@ -50,7 +50,9 @@ void main() {
         expect(find.text('สรุปผลประจำวัน'), findsOneWidget);
       });
 
-      testWidgets('should display correct icons for each menu item', (WidgetTester tester) async {
+      testWidgets('should display correct icons for each menu item', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -62,7 +64,9 @@ void main() {
         expect(find.byIcon(Icons.bar_chart), findsOneWidget);
       });
 
-      testWidgets('should use purple theme color for icons', (WidgetTester tester) async {
+      testWidgets('should use purple theme color for icons', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -81,13 +85,15 @@ void main() {
         }
       });
 
-      testWidgets('should display cards in grid layout', (WidgetTester tester) async {
+      testWidgets('should display cards in grid layout', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
         // Check grid view
         expect(find.byType(GridView), findsOneWidget);
-        
+
         final gridView = tester.widget<GridView>(find.byType(GridView));
         // For GridView.count, check crossAxisCount through reflection
         expect(gridView.runtimeType.toString(), contains('GridView'));
@@ -96,7 +102,9 @@ void main() {
         expect(gridView.childAspectRatio, equals(1.1));
       });
 
-      testWidgets('should have correct background color', (WidgetTester tester) async {
+      testWidgets('should have correct background color', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -107,32 +115,40 @@ void main() {
     });
 
     group('Navigation', () {
-      testWidgets('should navigate to RegistrationMenu when registration card tapped', (WidgetTester tester) async {
-        await tester.pumpWidget(createTestWidget());
-        await tester.pumpAndSettle();
+      testWidgets(
+        'should navigate to RegistrationMenu when registration card tapped',
+        (WidgetTester tester) async {
+          await tester.pumpWidget(createTestWidget());
+          await tester.pumpAndSettle();
 
-        // Tap on registration card
-        await tester.tap(find.text('ลงทะเบียน'));
-        await tester.pumpAndSettle();
+          // Tap on registration card
+          await tester.tap(find.text('ลงทะเบียน'));
+          await tester.pumpAndSettle();
 
-        // Should navigate to RegistrationMenu
-        expect(find.byType(RegistrationMenu), findsOneWidget);
-        expect(find.text('เมนูลงทะเบียน'), findsOneWidget);
-      });
+          // Should navigate to RegistrationMenu
+          expect(find.byType(RegistrationMenu), findsOneWidget);
+          expect(find.text('เมนูลงทะเบียน'), findsOneWidget);
+        },
+      );
 
-      testWidgets('should navigate to WhiteRobeScanner when white robe card tapped', (WidgetTester tester) async {
-        await tester.pumpWidget(createTestWidget());
-        await tester.pumpAndSettle();
+      testWidgets(
+        'should navigate to WhiteRobeScanner when white robe card tapped',
+        (WidgetTester tester) async {
+          await tester.pumpWidget(createTestWidget());
+          await tester.pumpAndSettle();
 
-        // Tap on white robe card
-        await tester.tap(find.text('เบิกชุดขาว'));
-        await tester.pumpAndSettle();
+          // Tap on white robe card
+          await tester.tap(find.text('เบิกชุดขาว'));
+          await tester.pumpAndSettle();
 
-        // Should navigate to WhiteRobeScanner
-        expect(find.byType(WhiteRobeScanner), findsOneWidget);
-      });
+          // Should navigate to WhiteRobeScanner
+          expect(find.byType(WhiteRobeScanner), findsOneWidget);
+        },
+      );
 
-      testWidgets('should show WIP message for unimplemented features', (WidgetTester tester) async {
+      testWidgets('should show WIP message for unimplemented features', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -153,7 +169,9 @@ void main() {
     });
 
     group('Accessibility', () {
-      testWidgets('should be accessible for screen readers', (WidgetTester tester) async {
+      testWidgets('should be accessible for screen readers', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -167,7 +185,9 @@ void main() {
         }
       });
 
-      testWidgets('should have semantic labels for menu items', (WidgetTester tester) async {
+      testWidgets('should have semantic labels for menu items', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -179,7 +199,9 @@ void main() {
         expect(find.text('สรุปผลประจำวัน'), findsOneWidget);
       });
 
-      testWidgets('should support tap interactions on entire card area', (WidgetTester tester) async {
+      testWidgets('should support tap interactions on entire card area', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -196,7 +218,9 @@ void main() {
     });
 
     group('Debug Mode Features', () {
-      testWidgets('should show debug button in debug mode', (WidgetTester tester) async {
+      testWidgets('should show debug button in debug mode', (
+        WidgetTester tester,
+      ) async {
         // Note: This test assumes we're running in debug mode during testing
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
@@ -204,24 +228,29 @@ void main() {
         // Debug button should be visible (if kDebugMode is true)
         // In real debug mode, this would show the test system button
         final debugButton = find.text('ทดสอบระบบ');
-        
+
         // Debug button may or may not be visible depending on build mode
         // If visible, it should be functional
         if (tester.any(debugButton)) {
           expect(find.byIcon(Icons.bug_report), findsOneWidget);
-          
+
           // Should be able to tap it
           await tester.tap(debugButton);
           await tester.pumpAndSettle();
-          
+
           // Should show success message
-          expect(find.text('สร้างข้อมูลทดสอบแล้ว ดู Console สำหรับรายละเอียด'), findsOneWidget);
+          expect(
+            find.text('สร้างข้อมูลทดสอบแล้ว ดู Console สำหรับรายละเอียด'),
+            findsOneWidget,
+          );
         }
       });
     });
 
     group('Layout Responsiveness', () {
-      testWidgets('should adapt to different screen sizes', (WidgetTester tester) async {
+      testWidgets('should adapt to different screen sizes', (
+        WidgetTester tester,
+      ) async {
         // Test with different screen sizes
         await tester.binding.setSurfaceSize(const Size(400, 600));
         await tester.pumpWidget(createTestWidget());
@@ -230,7 +259,7 @@ void main() {
         // Should still display all menu items
         expect(find.text('ลงทะเบียน'), findsOneWidget);
         expect(find.text('เบิกชุดขาว'), findsOneWidget);
-        
+
         // Test with larger screen
         await tester.binding.setSurfaceSize(const Size(800, 1200));
         await tester.pump();
@@ -238,12 +267,14 @@ void main() {
         // Should still work properly
         expect(find.text('ลงทะเบียน'), findsOneWidget);
         expect(find.text('เบิกชุดขาว'), findsOneWidget);
-        
+
         // Reset to default size
         await tester.binding.setSurfaceSize(null);
       });
 
-      testWidgets('should handle padding correctly', (WidgetTester tester) async {
+      testWidgets('should handle padding correctly', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -252,16 +283,18 @@ void main() {
           of: find.byType(Scaffold),
           matching: find.byType(Padding),
         );
-        
+
         expect(paddingWidget, findsWidgets);
-        
+
         final padding = tester.widget<Padding>(paddingWidget.first);
         expect(padding.padding, equals(const EdgeInsets.all(20)));
       });
     });
 
     group('Card Styling', () {
-      testWidgets('should have correct card styling', (WidgetTester tester) async {
+      testWidgets('should have correct card styling', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -272,24 +305,28 @@ void main() {
         final card = tester.widget<Card>(cards.first);
         expect(card.elevation, equals(4));
         expect(card.shape, isA<RoundedRectangleBorder>());
-        
+
         final shape = card.shape as RoundedRectangleBorder;
         expect(shape.borderRadius, equals(BorderRadius.circular(20)));
       });
 
-      testWidgets('should have correct InkWell border radius', (WidgetTester tester) async {
+      testWidgets('should have correct InkWell border radius', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
         final inkWells = find.byType(InkWell);
-        
+
         for (int i = 0; i < 5; i++) {
           final inkWell = tester.widget<InkWell>(inkWells.at(i));
           expect(inkWell.borderRadius, equals(BorderRadius.circular(20)));
         }
       });
 
-      testWidgets('should have correct text styling', (WidgetTester tester) async {
+      testWidgets('should have correct text styling', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -307,7 +344,9 @@ void main() {
     });
 
     group('Error Handling', () {
-      testWidgets('should handle navigation errors gracefully', (WidgetTester tester) async {
+      testWidgets('should handle navigation errors gracefully', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -322,7 +361,9 @@ void main() {
         expect(tester.takeException(), isNull);
       });
 
-      testWidgets('should handle missing database gracefully', (WidgetTester tester) async {
+      testWidgets('should handle missing database gracefully', (
+        WidgetTester tester,
+      ) async {
         // Test that UI renders even if database operations fail
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
@@ -334,7 +375,9 @@ void main() {
     });
 
     group('Performance', () {
-      testWidgets('should not cause memory leaks with repeated navigation', (WidgetTester tester) async {
+      testWidgets('should not cause memory leaks with repeated navigation', (
+        WidgetTester tester,
+      ) async {
         await tester.pumpWidget(createTestWidget());
         await tester.pumpAndSettle();
 
@@ -342,7 +385,7 @@ void main() {
         for (int i = 0; i < 3; i++) {
           await tester.tap(find.text('ลงทะเบียน'));
           await tester.pumpAndSettle();
-          
+
           await tester.pageBack();
           await tester.pumpAndSettle();
         }
@@ -354,7 +397,7 @@ void main() {
 
       testWidgets('should rebuild efficiently', (WidgetTester tester) async {
         int buildCount = 0;
-        
+
         Widget createCountingWidget() {
           return MaterialApp(
             home: Builder(
@@ -368,15 +411,15 @@ void main() {
 
         await tester.pumpWidget(createCountingWidget());
         await tester.pumpAndSettle();
-        
+
         final initialBuildCount = buildCount;
 
         // Interactions should not cause unnecessary rebuilds
         await tester.tap(find.text('จองที่พัก'));
         await tester.pumpAndSettle();
-        
+
         await tester.pump(const Duration(seconds: 4)); // Wait for snackbar
-        
+
         // Build count should remain reasonable
         expect(buildCount, lessThanOrEqualTo(initialBuildCount + 2));
       });

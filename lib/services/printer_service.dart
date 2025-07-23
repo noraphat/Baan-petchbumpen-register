@@ -91,4 +91,5 @@ class PrinterService {
     await SunmiPrinter.lineWrap(4);
     await SunmiPrinter.unbindingPrinter();
   }
+
 }

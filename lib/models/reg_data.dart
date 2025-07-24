@@ -9,6 +9,7 @@ class RegData {
   final String addr;
   final String gender;
   final bool hasIdCard;   // มีบัตรประชาชนหรือไม่
+  final String status;    // 'A' = Active, 'I' = Inactive
   final DateTime createdAt; // วันที่สร้างข้อมูล
   final DateTime updatedAt; // วันที่แก้ไขล่าสุด
 
@@ -21,6 +22,7 @@ class RegData {
     required this.addr,
     required this.gender,
     required this.hasIdCard,
+    required this.status,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -34,6 +36,7 @@ class RegData {
         'addr': addr,
         'gender': gender,
         'hasIdCard': hasIdCard ? 1 : 0,
+        'status': status,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
       };
@@ -47,6 +50,7 @@ class RegData {
         addr: m['addr'] ?? '',
         gender: m['gender'] ?? 'อื่น ๆ',
         hasIdCard: m['hasIdCard'] == 1,
+        status: m['status'] ?? 'A',
         createdAt: DateTime.parse(m['createdAt']),
         updatedAt: DateTime.parse(m['updatedAt']),
       );
@@ -69,6 +73,7 @@ class RegData {
         addr: addr,
         gender: gender,
         hasIdCard: true,
+        status: 'A',
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -91,6 +96,7 @@ class RegData {
         addr: addr,
         gender: gender,
         hasIdCard: false,
+        status: 'A',
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -108,6 +114,7 @@ class RegData {
         addr: addr,
         gender: gender,
         hasIdCard: hasIdCard,
+        status: status,
         createdAt: createdAt,
         updatedAt: updatedAt ?? DateTime.now(),
       );
@@ -120,6 +127,7 @@ class RegData {
     String? phone,
     String? addr,
     String? gender,
+    String? status,
     DateTime? updatedAt,
   }) => RegData(
         id: id,
@@ -130,6 +138,7 @@ class RegData {
         addr: addr ?? this.addr,
         gender: gender ?? this.gender,
         hasIdCard: hasIdCard,
+        status: status ?? this.status,
         createdAt: createdAt,
         updatedAt: updatedAt ?? DateTime.now(),
       );
@@ -426,5 +435,18 @@ class StayRecord {
     
     // Stay หมดอายุถ้า endDate < วันนี้
     return endDateOnly.isBefore(today);
+  }
+
+  // ได้สถานะที่ถูกต้องตามเวลาจริง
+  String get actualStatus {
+    if (isExpired && (status == 'active' || status == 'extended')) {
+      return 'completed'; // ปรับสถานะเป็น completed หากหมดอายุแล้ว
+    }
+    return status; // ใช้สถานะเดิมหากยังไม่หมดอายุ
+  }
+
+  // ตรวจสอบว่าต้องอัปเดตสถานะในฐานข้อมูลหรือไม่
+  bool get needsStatusUpdate {
+    return isExpired && (status == 'active' || status == 'extended');
   }
 }

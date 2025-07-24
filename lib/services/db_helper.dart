@@ -18,7 +18,7 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'dhamma_reg.db');
     return openDatabase(
       path,
-      version: 5, // เพิ่มเวอร์ชันเพื่ออัปเดตฐานข้อมูล
+      version: 6, // เพิ่มเวอร์ชันเพื่ออัปเดตฐานข้อมูล
       onCreate: (db, _) async {
         // ตารางข้อมูลหลัก
         await db.execute('''
@@ -31,6 +31,7 @@ class DbHelper {
             addr TEXT,
             gender TEXT,
             hasIdCard INTEGER,
+            status TEXT DEFAULT 'A',
             createdAt TEXT,
             updatedAt TEXT
           )
@@ -170,6 +171,14 @@ class DbHelper {
             'updated_at': DateTime.now().toIso8601String(),
           });
         }
+
+        if (oldVersion < 6) {
+          // เพิ่มคอลัมน์ status สำหรับ soft delete
+          await db.execute('ALTER TABLE regs ADD COLUMN status TEXT DEFAULT \'A\'');
+          
+          // อัปเดตข้อมูลเก่าให้มี status = 'A'
+          await db.execute('UPDATE regs SET status = \'A\' WHERE status IS NULL');
+        }
       },
     );
   }
@@ -198,22 +207,79 @@ class DbHelper {
   );
 
   Future<List<RegData>> fetchAll() async {
-    final res = await (await db).query('regs', orderBy: 'first ASC');
+    final res = await (await db).query(
+      'regs',
+      where: 'status = ?',
+      whereArgs: ['A'],
+      orderBy: 'first ASC',
+    );
     return res.map((m) => RegData.fromMap(m)).toList();
   }
 
   Future<List<RegData>> fetchByIdCard(bool hasIdCard) async {
     final res = await (await db).query(
       'regs',
-      where: 'hasIdCard = ?',
-      whereArgs: [hasIdCard ? 1 : 0],
+      where: 'hasIdCard = ? AND status = ?',
+      whereArgs: [hasIdCard ? 1 : 0, 'A'],
       orderBy: 'first ASC',
     );
     return res.map((m) => RegData.fromMap(m)).toList();
   }
 
-  Future<void> delete(String id) async =>
+  // Soft delete - เปลี่ยนสถานะเป็น 'I' (Inactive)
+  Future<void> delete(String id) async => (await db).update(
+    'regs',
+    {'status': 'I', 'updatedAt': DateTime.now().toIso8601String()},
+    where: 'id = ?',
+    whereArgs: [id],
+  );
+
+  // Hard delete - ลบจริงออกจากฐานข้อมูล (สำหรับ Admin)
+  Future<void> hardDelete(String id) async =>
       (await db).delete('regs', where: 'id = ?', whereArgs: [id]);
+
+  // ดึงรายการเพศที่มีอยู่จริงในฐานข้อมูล
+  Future<List<String>> getAvailableGenders() async {
+    final res = await (await db).rawQuery('''
+      SELECT DISTINCT gender 
+      FROM regs 
+      WHERE status = 'A' AND gender IS NOT NULL AND gender != '' 
+      ORDER BY gender ASC
+    ''');
+    return res.map((row) => row['gender'] as String).toList();
+  }
+
+  // ดึงรายการข้อมูลที่ถูกลบ (สำหรับ Developer Setting)
+  Future<List<RegData>> fetchDeletedRecords() async {
+    final res = await (await db).query(
+      'regs',
+      where: 'status = ?',
+      whereArgs: ['I'],
+      orderBy: 'updatedAt DESC',
+    );
+    return res.map((m) => RegData.fromMap(m)).toList();
+  }
+
+  // กู้คืนข้อมูลที่ถูกลบ (Restore)
+  Future<void> restoreRecord(String id) async => (await db).update(
+    'regs',
+    {'status': 'A', 'updatedAt': DateTime.now().toIso8601String()},
+    where: 'id = ?',
+    whereArgs: [id],
+  );
+
+  // อัปเดตสถานะ stay ที่หมดอายุแล้วอัตโนมัติ
+  Future<void> updateExpiredStays() async {
+    final today = DateTime.now();
+    final todayStr = DateTime(today.year, today.month, today.day).toIso8601String();
+    
+    await (await db).update(
+      'stays',
+      {'status': 'completed'},
+      where: 'status IN (?, ?) AND date(end_date) < date(?)',
+      whereArgs: ['active', 'extended', todayStr],
+    );
+  }
 
   // ฟังก์ชันสำหรับข้อมูลเพิ่มเติม
   Future<RegAdditionalInfo?> fetchAdditionalInfo(String regId) async {
@@ -356,8 +422,11 @@ class DbHelper {
     return res.isEmpty ? null : StayRecord.fromMap(res.first);
   }
 
-  // ดึงข้อมูล Stay ทั้งหมดของผู้เข้าพัก
+  // ดึงข้อมูล Stay ทั้งหมดของผู้เข้าพัก (พร้อมอัปเดตสถานะที่หมดอายุ)
   Future<List<StayRecord>> fetchAllStays(String visitorId) async {
+    // อัปเดตสถานะที่หมดอายุก่อนดึงข้อมูล
+    await updateExpiredStays();
+    
     final res = await (await db).query(
       'stays',
       where: 'visitor_id = ?',
@@ -367,13 +436,17 @@ class DbHelper {
     return res.map((m) => StayRecord.fromMap(m)).toList();
   }
 
-  // ดึงข้อมูล Stay ที่ยัง active
+  // ดึงข้อมูล Stay ที่ยัง active (พร้อมอัปเดตสถานะที่หมดอายุ)
   Future<List<StayRecord>> fetchActiveStays(String visitorId) async {
-    final now = DateTime.now().toIso8601String();
+    // อัปเดตสถานะที่หมดอายุก่อนดึงข้อมูล
+    await updateExpiredStays();
+    
+    final today = DateTime.now();
+    final todayStr = DateTime(today.year, today.month, today.day).toIso8601String();
     final res = await (await db).query(
       'stays',
-      where: 'visitor_id = ? AND end_date >= ?',
-      whereArgs: [visitorId, now],
+      where: 'visitor_id = ? AND date(end_date) >= date(?)',
+      whereArgs: [visitorId, todayStr],
       orderBy: 'created_at DESC',
     );
     return res.map((m) => StayRecord.fromMap(m)).toList();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/db_helper.dart';
 import '../services/menu_settings_service.dart';
+import 'developer_settings.dart';
 
 class AdminSettings extends StatefulWidget {
   const AdminSettings({super.key});
@@ -418,6 +419,39 @@ class _AdminSettingsState extends State<AdminSettings> {
                     _buildInfoRow('พื้นที่ DB:', '${_dbSizeKB.toStringAsFixed(1)} MB'),
                   ],
                 ),
+              ),
+            ),
+            
+            // Developer Tools Section
+            _buildSectionHeader('Developer Tools', Icons.developer_mode),
+            Card(
+              child: ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.delete_sweep,
+                    color: Colors.orange[700],
+                    size: 24,
+                  ),
+                ),
+                title: const Text(
+                  'Soft Delete Management',
+                  style: TextStyle(fontWeight: FontWeight.w500),
+                ),
+                subtitle: const Text('จัดการข้อมูลที่ถูกลบ (กู้คืน/ลบถาวร)'),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const DeveloperSettingsScreen(),
+                    ),
+                  );
+                },
               ),
             ),
             

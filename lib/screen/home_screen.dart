@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'admin_settings.dart';
 import 'daily_summary.dart';
+import 'visitor_management.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -149,6 +150,15 @@ class _HomeScreenState extends State<HomeScreen> {
         'onTap': () => Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const RegistrationMenu()),
+        ),
+      },
+      {
+        'label': 'ข้อมูลผู้ปฏิบัติธรรม',
+        'icon': Icons.people_outline,
+        'enabled': true, // Always enabled
+        'onTap': () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const VisitorManagementScreen()),
         ),
       },
       {

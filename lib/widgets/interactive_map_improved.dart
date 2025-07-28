@@ -600,47 +600,52 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 32,
-                  height: 32,
+                  width: 24,
+                  height: 24,
                   decoration: BoxDecoration(
                     color: _getRoomStatusColor(
                       room.status,
                     ).withValues(alpha: 0.6),
                     border: Border.all(
                       color: _getRoomStatusColor(room.status),
-                      width: 2,
+                      width: 1.5,
                     ),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: Icon(
                     _getRoomStatusIcon(room.status),
-                    size: 16,
+                    size: 12,
                     color: _getRoomStatusColor(room.status),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  room.name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                    color: _getRoomStatusColor(room.status),
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
+                Flexible(
+                  child: Text(
+                    room.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 11,
+                      color: _getRoomStatusColor(room.status),
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 2),
                 Text(
                   '${room.size.displayName} • ${room.capacity} คน',
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 9,
                     color: Colors.grey.shade700,
                     fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

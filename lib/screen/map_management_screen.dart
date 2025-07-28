@@ -733,16 +733,18 @@ class _MapManagementScreenState extends State<MapManagementScreen>
       text: room?.description ?? '',
     );
     RoomSize selectedSize = room?.size ?? RoomSize.medium;
+    RoomShape selectedShape = room?.shape ?? RoomShape.square;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(isEditing ? 'แก้ไขห้องพัก' : 'เพิ่มห้องพักใหม่'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+          content: SizedBox(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                 TextField(
                   controller: nameController,
                   decoration: const InputDecoration(
@@ -769,6 +771,38 @@ class _MapManagementScreenState extends State<MapManagementScreen>
                       setDialogState(() => selectedSize = size!),
                 ),
                 const SizedBox(height: 16),
+                DropdownButtonFormField<RoomShape>(
+                  value: selectedShape,
+                  decoration: const InputDecoration(
+                    labelText: 'รูปร่างห้อง',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: RoomShape.values
+                      .map(
+                        (shape) => DropdownMenuItem(
+                          value: shape,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 20,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withValues(alpha: 0.6),
+                                  border: Border.all(color: Colors.blue, width: 1),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(shape.displayName),
+                            ],
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (shape) =>
+                      setDialogState(() => selectedShape = shape!),
+                ),
+                const SizedBox(height: 16),
                 TextField(
                   controller: capacityController,
                   decoration: const InputDecoration(
@@ -786,7 +820,8 @@ class _MapManagementScreenState extends State<MapManagementScreen>
                   ),
                   maxLines: 2,
                 ),
-              ],
+                ],
+              ),
             ),
           ),
           actions: [
@@ -818,6 +853,7 @@ class _MapManagementScreenState extends State<MapManagementScreen>
                   final updatedRoom = room.copyWith(
                     name: nameController.text.trim(),
                     size: selectedSize,
+                    shape: selectedShape,
                     capacity: capacity,
                     description: descriptionController.text.trim().isEmpty
                         ? null
@@ -837,6 +873,7 @@ class _MapManagementScreenState extends State<MapManagementScreen>
                   final roomId = await _mapService.addRoom(
                     name: nameController.text.trim(),
                     size: selectedSize,
+                    shape: selectedShape,
                     capacity: capacity,
                     description: descriptionController.text.trim().isEmpty
                         ? null

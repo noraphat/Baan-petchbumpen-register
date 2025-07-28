@@ -30,11 +30,34 @@ enum RoomStatus {
   }
 }
 
+/// รูปร่างของห้องพัก
+enum RoomShape {
+  square('square', 'สี่เหลี่ยมจตุรัส', 50.0, 50.0),
+  rectangleHorizontal('rect_h', 'สี่เหลี่ยมผืนผ้า (แนวนอน)', 80.0, 50.0),
+  rectangleVertical('rect_v', 'สี่เหลี่ยมผืนผ้า (แนวตั้ง)', 50.0, 80.0),
+  rectangleHorizontalLarge('rect_h_large', 'สี่เหลี่ยมผืนผ้า (แนวนอน x2)', 160.0, 50.0),
+  rectangleVerticalLarge('rect_v_large', 'สี่เหลี่ยมผืนผ้า (แนวตั้ง x2)', 50.0, 160.0);
+
+  const RoomShape(this.code, this.displayName, this.width, this.height);
+  final String code;
+  final String displayName;
+  final double width;
+  final double height;
+
+  static RoomShape fromCode(String code) {
+    return RoomShape.values.firstWhere((shape) => shape.code == code);
+  }
+
+  /// ดึงขนาดในรูปแบบ (width, height)
+  (double, double) get size => (width, height);
+}
+
 /// โมเดลสำหรับข้อมูลห้องพัก
 class Room {
   final int? id;
   final String name;
   final RoomSize size;
+  final RoomShape shape;
   final int capacity;
   final double? positionX;
   final double? positionY;
@@ -48,6 +71,7 @@ class Room {
     this.id,
     required this.name,
     required this.size,
+    this.shape = RoomShape.square,
     required this.capacity,
     this.positionX,
     this.positionY,
@@ -63,12 +87,14 @@ class Room {
   factory Room.create({
     required String name,
     required RoomSize size,
+    RoomShape shape = RoomShape.square,
     required int capacity,
     String? description,
   }) {
     return Room(
       name: name,
       size: size,
+      shape: shape,
       capacity: capacity,
       description: description,
     );
@@ -79,6 +105,7 @@ class Room {
     int? id,
     String? name,
     RoomSize? size,
+    RoomShape? shape,
     int? capacity,
     double? positionX,
     double? positionY,
@@ -91,6 +118,7 @@ class Room {
       id: id ?? this.id,
       name: name ?? this.name,
       size: size ?? this.size,
+      shape: shape ?? this.shape,
       capacity: capacity ?? this.capacity,
       positionX: positionX ?? this.positionX,
       positionY: positionY ?? this.positionY,
@@ -108,6 +136,7 @@ class Room {
       if (id != null) 'id': id,
       'name': name,
       'size': size.code,
+      'shape': shape.code,
       'capacity': capacity,
       'position_x': positionX,
       'position_y': positionY,
@@ -125,6 +154,9 @@ class Room {
       id: map['id'] as int?,
       name: map['name'] as String,
       size: RoomSize.fromCode(map['size'] as String),
+      shape: map['shape'] != null 
+        ? RoomShape.fromCode(map['shape'] as String)
+        : RoomShape.square, // default สำหรับข้อมูลเก่า
       capacity: map['capacity'] as int,
       positionX: map['position_x'] as double?,
       positionY: map['position_y'] as double?,
@@ -150,14 +182,7 @@ class Room {
 
   /// ดึงขนาดของห้องในรูปแบบ (width, height) สำหรับ UI
   (double, double) getSizeForUI() {
-    switch (size) {
-      case RoomSize.small:
-        return (40.0, 40.0); // สี่เหลี่ยมจัตุรัส
-      case RoomSize.medium:
-        return (60.0, 40.0); // สี่เหลี่ยมผืนผ้า
-      case RoomSize.large:
-        return (100.0, 40.0); // สี่เหลี่ยมผืนผ้ายาว
-    }
+    return shape.size;
   }
 
   @override

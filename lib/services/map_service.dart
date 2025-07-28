@@ -256,6 +256,7 @@ class MapService {
   Future<int?> addRoom({
     required String name,
     required RoomSize size,
+    RoomShape shape = RoomShape.square,
     required int capacity,
     String? description,
   }) async {
@@ -263,6 +264,7 @@ class MapService {
       final room = Room.create(
         name: name,
         size: size,
+        shape: shape,
         capacity: capacity,
         description: description,
       );

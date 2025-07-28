@@ -261,7 +261,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                           width: _mapImageSize?.width ?? 1200,
                           height: _mapImageSize?.height ?? 800,
                           child: DragTarget<Room>(
-                            onAccept: (room) {
+                            onAcceptWithDetails: (details) {
                               // This will be handled by individual positioned drag targets
                             },
                             builder: (context, candidateData, rejectedData) {
@@ -628,7 +628,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 11,
-                      color: _getRoomStatusColor(room.status),
+                      color: Colors.white,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -936,48 +936,67 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              color: borderColor.withValues(alpha: 0.3),
-              borderRadius: BorderRadius.circular(4),
+          if (height > 20)
+            Container(
+              padding: const EdgeInsets.all(1),
+              decoration: BoxDecoration(
+                color: borderColor.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: Icon(
+                icon,
+                color: borderColor,
+                size: height > 60
+                    ? 12
+                    : height > 40
+                    ? 8
+                    : 6,
+              ),
             ),
-            child: Icon(
-              icon,
-              color: borderColor,
-              size: height > 35
-                  ? 18
-                  : height > 25
-                  ? 14
-                  : 10,
-            ),
-          ),
           if (height > 30) ...[
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Flexible(
               child: Text(
                 room.name,
                 style: TextStyle(
-                  fontSize: width > 80
-                      ? 12
+                  fontSize: width > 100
+                      ? 11
                       : width > 60
-                      ? 10
-                      : 9,
+                      ? 9
+                      : 7,
                   fontWeight: FontWeight.bold,
-                  color: borderColor,
+                  color: Colors.white,
+                  shadows: [
+                    Shadow(
+                      offset: Offset(0.5, 0.5),
+                      blurRadius: 1.0,
+                      color: Colors.black.withValues(alpha: 0.7),
+                    ),
+                  ],
                 ),
-                maxLines: 2,
+                maxLines: height > 60 ? 2 : 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
               ),
             ),
-            if (height > 45)
-              Text(
-                '${room.capacity} คน',
-                style: TextStyle(
-                  fontSize: 8,
-                  color: borderColor.withValues(alpha: 0.8),
-                  fontWeight: FontWeight.w500,
+            if (width >= 50 && height >= 40)
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Text(
+                  '${room.capacity} คน',
+                  style: TextStyle(
+                    fontSize: height > 40 ? 6 : 5,
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontWeight: FontWeight.w400,
+                    shadows: [
+                      Shadow(
+                        offset: Offset(0.3, 0.3),
+                        blurRadius: 0.5,
+                        color: Colors.black.withValues(alpha: 0.6),
+                      ),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
                 ),
               ),
           ],

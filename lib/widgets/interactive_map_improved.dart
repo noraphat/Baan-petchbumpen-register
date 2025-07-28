@@ -593,8 +593,8 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  _getRoomStatusColor(room.status).withValues(alpha: 0.15),
-                  _getRoomStatusColor(room.status).withValues(alpha: 0.05),
+                  _getRoomStatusColor(room.status).withValues(alpha: 0.4),
+                  _getRoomStatusColor(room.status).withValues(alpha: 0.2),
                 ],
               ),
             ),
@@ -607,7 +607,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                   decoration: BoxDecoration(
                     color: _getRoomStatusColor(
                       room.status,
-                    ).withValues(alpha: 0.2),
+                    ).withValues(alpha: 0.6),
                     border: Border.all(
                       color: _getRoomStatusColor(room.status),
                       width: 2,
@@ -878,7 +878,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     IconData icon;
 
     // กำหนดสีตามสถานะ
-    backgroundColor = _getRoomStatusColor(room.status).withValues(alpha: 0.1);
+    backgroundColor = _getRoomStatusColor(room.status).withValues(alpha: 0.8);
     borderColor = _getRoomStatusColor(room.status);
     icon = _getRoomStatusIcon(room.status);
 
@@ -934,7 +934,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
           Container(
             padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              color: borderColor.withValues(alpha: 0.1),
+              color: borderColor.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(4),
             ),
             child: Icon(

@@ -13,24 +13,26 @@ class MapManagementScreen extends StatefulWidget {
   State<MapManagementScreen> createState() => _MapManagementScreenState();
 }
 
-class _MapManagementScreenState extends State<MapManagementScreen> with TickerProviderStateMixin {
+class _MapManagementScreenState extends State<MapManagementScreen>
+    with TickerProviderStateMixin {
   final MapService _mapService = MapService();
   late TabController _tabController;
-  
+
   // Map management
   List<MapData> _maps = [];
   MapData? _activeMap;
   bool _isLoadingMaps = true;
-  
+
   // Room management
   List<Room> _rooms = [];
   bool _isLoadingRooms = true;
   Room? _selectedRoom;
-  
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+
     _loadData();
   }
 
@@ -41,10 +43,7 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
   }
 
   Future<void> _loadData() async {
-    await Future.wait([
-      _loadMaps(),
-      _loadRooms(),
-    ]);
+    await Future.wait([_loadMaps(), _loadRooms()]);
   }
 
   Future<void> _loadMaps() async {
@@ -52,11 +51,28 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
     try {
       final maps = await _mapService.getAllMaps();
       final activeMap = await _mapService.getActiveMap();
+
+      // Debug: ตรวจสอบข้อมูลแผนที่
+      debugPrint('=== Maps Debug ===');
+      debugPrint('Total maps: ${maps.length}');
+      for (int i = 0; i < maps.length; i++) {
+        final map = maps[i];
+        debugPrint(
+          'Map $i: ${map.name} (ID: ${map.id}, Active: ${map.isActive})',
+        );
+        debugPrint('  - HasImage: ${map.hasImage}');
+        debugPrint('  - ImagePath: ${map.imagePath}');
+      }
+      debugPrint('Active map: ${activeMap?.name}');
+      debugPrint('Active map hasImage: ${activeMap?.hasImage}');
+      debugPrint('Active map imagePath: ${activeMap?.imagePath}');
+
       setState(() {
         _maps = maps;
         _activeMap = activeMap;
       });
     } catch (e) {
+      debugPrint('ERROR loading maps: $e');
       _showErrorSnackBar('เกิดข้อผิดพลาดในการโหลดข้อมูลแผนที่');
     } finally {
       setState(() => _isLoadingMaps = false);
@@ -157,17 +173,18 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
             child: _isLoadingMaps
                 ? const Center(child: CircularProgressIndicator())
                 : _maps.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'ยังไม่มีแผนที่\nกดปุ่ม "เพิ่มแผนที่" เพื่อเริ่มต้น',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _maps.length,
-                        itemBuilder: (context, index) => _buildMapCard(_maps[index]),
-                      ),
+                ? const Center(
+                    child: Text(
+                      'ยังไม่มีแผนที่\nกดปุ่ม "เพิ่มแผนที่" เพื่อเริ่มต้น',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _maps.length,
+                    itemBuilder: (context, index) =>
+                        _buildMapCard(_maps[index]),
+                  ),
           ),
         ],
       ),
@@ -176,16 +193,13 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
 
   Widget _buildMapCard(MapData map) {
     final isActive = map.id == _activeMap?.id;
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: isActive ? Colors.green : Colors.grey,
-          child: Icon(
-            isActive ? Icons.check : Icons.map,
-            color: Colors.white,
-          ),
+          child: Icon(isActive ? Icons.check : Icons.map, color: Colors.white),
         ),
         title: Text(
           map.name,
@@ -219,10 +233,7 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
               ),
             const PopupMenuItem(
               value: 'edit',
-              child: ListTile(
-                leading: Icon(Icons.edit),
-                title: Text('แก้ไข'),
-              ),
+              child: ListTile(leading: Icon(Icons.edit), title: Text('แก้ไข')),
             ),
             if (!isActive)
               const PopupMenuItem(
@@ -273,7 +284,9 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
   void _showMapDialog({MapData? map}) {
     final isEditing = map != null;
     final nameController = TextEditingController(text: map?.name ?? '');
-    final descriptionController = TextEditingController(text: map?.description ?? '');
+    final descriptionController = TextEditingController(
+      text: map?.description ?? '',
+    );
     String? imagePath = map?.imagePath;
 
     showDialog(
@@ -327,35 +340,51 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
                               child: ElevatedButton.icon(
                                 onPressed: () async {
                                   try {
-                                    final newImagePath = await _mapService.uploadMapImage(
-                                      source: ImageSource.gallery,
-                                    );
+                                    final newImagePath = await _mapService
+                                        .uploadMapImage(
+                                          source: ImageSource.gallery,
+                                        );
                                     if (newImagePath != null) {
-                                      setDialogState(() => imagePath = newImagePath);
+                                      setDialogState(
+                                        () => imagePath = newImagePath,
+                                      );
                                     } else {
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('ไม่ได้เลือกภาพ')),
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('ไม่ได้เลือกภาพ'),
+                                          ),
                                         );
                                       }
                                     }
                                   } catch (e) {
                                     if (context.mounted) {
-                                      final errorMessage = e.toString().replaceFirst('Exception: ', '');
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      final errorMessage = e
+                                          .toString()
+                                          .replaceFirst('Exception: ', '');
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
                                           content: Text(errorMessage),
                                           backgroundColor: Colors.orange,
                                           duration: const Duration(seconds: 5),
-                                          action: errorMessage.contains('อนุญาต')
+                                          action:
+                                              errorMessage.contains('อนุญาต')
                                               ? SnackBarAction(
                                                   label: 'ตั้งค่า',
                                                   textColor: Colors.white,
                                                   onPressed: () {
                                                     // เปิดการตั้งค่าแอป (ต้องเพิ่ม package: permission_handler)
-                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
                                                       const SnackBar(
-                                                        content: Text('กรุณาไปที่ Settings > Apps > แอปนี้ > Permissions เพื่ออนุญาตการเข้าถึง'),
+                                                        content: Text(
+                                                          'กรุณาไปที่ Settings > Apps > แอปนี้ > Permissions เพื่ออนุญาตการเข้าถึง',
+                                                        ),
                                                       ),
                                                     );
                                                   },
@@ -369,7 +398,9 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
                                 icon: const Icon(Icons.photo_library),
                                 label: const Text('เลือกภาพจากแกลเลอรี่'),
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                 ),
                               ),
                             ),
@@ -379,35 +410,51 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
                               child: ElevatedButton.icon(
                                 onPressed: () async {
                                   try {
-                                    final newImagePath = await _mapService.uploadMapImage(
-                                      source: ImageSource.camera,
-                                    );
+                                    final newImagePath = await _mapService
+                                        .uploadMapImage(
+                                          source: ImageSource.camera,
+                                        );
                                     if (newImagePath != null) {
-                                      setDialogState(() => imagePath = newImagePath);
+                                      setDialogState(
+                                        () => imagePath = newImagePath,
+                                      );
                                     } else {
                                       if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('ไม่ได้ถ่ายภาพ')),
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('ไม่ได้ถ่ายภาพ'),
+                                          ),
                                         );
                                       }
                                     }
                                   } catch (e) {
                                     if (context.mounted) {
-                                      final errorMessage = e.toString().replaceFirst('Exception: ', '');
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      final errorMessage = e
+                                          .toString()
+                                          .replaceFirst('Exception: ', '');
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
                                         SnackBar(
                                           content: Text(errorMessage),
                                           backgroundColor: Colors.orange,
                                           duration: const Duration(seconds: 5),
-                                          action: errorMessage.contains('อนุญาต')
+                                          action:
+                                              errorMessage.contains('อนุญาต')
                                               ? SnackBarAction(
                                                   label: 'ตั้งค่า',
                                                   textColor: Colors.white,
                                                   onPressed: () {
                                                     // เปิดการตั้งค่าแอป (ต้องเพิ่ม package: permission_handler)
-                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
                                                       const SnackBar(
-                                                        content: Text('กรุณาไปที่ Settings > Apps > แอปนี้ > Permissions เพื่ออนุญาตการเข้าถึง'),
+                                                        content: Text(
+                                                          'กรุณาไปที่ Settings > Apps > แอปนี้ > Permissions เพื่ออนุญาตการเข้าถึง',
+                                                        ),
                                                       ),
                                                     );
                                                   },
@@ -421,7 +468,9 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
                                 icon: const Icon(Icons.camera_alt),
                                 label: const Text('ถ่ายภาพด้วยกล้อง'),
                                 style: ElevatedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
                                 ),
                               ),
                             ),
@@ -459,7 +508,7 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
                         : descriptionController.text.trim(),
                     imagePath: imagePath,
                   );
-                  
+
                   final success = await _mapService.updateMap(updatedMap);
                   if (success) {
                     _showSuccessSnackBar('แก้ไขแผนที่สำเร็จ');
@@ -498,7 +547,9 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('ยืนยันการลบ'),
-        content: Text('คุณต้องการลบแผนที่ "${map.name}" หรือไม่?\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้'),
+        content: Text(
+          'คุณต้องการลบแผนที่ "${map.name}" หรือไม่?\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -555,17 +606,18 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
             child: _isLoadingRooms
                 ? const Center(child: CircularProgressIndicator())
                 : _rooms.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'ยังไม่มีห้องพัก\nกดปุ่ม "เพิ่มห้องพัก" เพื่อเริ่มต้น',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 16, color: Colors.grey),
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: _rooms.length,
-                        itemBuilder: (context, index) => _buildRoomCard(_rooms[index]),
-                      ),
+                ? const Center(
+                    child: Text(
+                      'ยังไม่มีห้องพัก\nกดปุ่ม "เพิ่มห้องพัก" เพื่อเริ่มต้น',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _rooms.length,
+                    itemBuilder: (context, index) =>
+                        _buildRoomCard(_rooms[index]),
+                  ),
           ),
         ],
       ),
@@ -575,7 +627,7 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
   Widget _buildRoomCard(Room room) {
     Color statusColor;
     IconData statusIcon;
-    
+
     switch (room.status) {
       case RoomStatus.available:
         statusColor = Colors.green;
@@ -590,7 +642,7 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
         statusIcon = Icons.schedule;
         break;
     }
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -605,12 +657,19 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('ขนาด: ${room.size.displayName} | ความจุ: ${room.capacity} คน'),
+            Text(
+              'ขนาด: ${room.size.displayName} | ความจุ: ${room.capacity} คน',
+            ),
             Text('สถานะ: ${room.status.displayName}'),
             if (room.hasPosition)
-              Text('ตำแหน่ง: (${room.positionX!.toInt()}, ${room.positionY!.toInt()})')
+              Text(
+                'ตำแหน่ง: (${room.positionX!.toInt()}, ${room.positionY!.toInt()})',
+              )
             else
-              const Text('ยังไม่ได้วางตำแหน่งบนแผนที่', style: TextStyle(color: Colors.orange)),
+              const Text(
+                'ยังไม่ได้วางตำแหน่งบนแผนที่',
+                style: TextStyle(color: Colors.orange),
+              ),
             if (room.description != null) Text(room.description!),
           ],
         ),
@@ -619,10 +678,7 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
           itemBuilder: (context) => [
             const PopupMenuItem(
               value: 'edit',
-              child: ListTile(
-                leading: Icon(Icons.edit),
-                title: Text('แก้ไข'),
-              ),
+              child: ListTile(leading: Icon(Icons.edit), title: Text('แก้ไข')),
             ),
             const PopupMenuItem(
               value: 'position',
@@ -673,7 +729,9 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
     final capacityController = TextEditingController(
       text: room?.capacity.toString() ?? '2',
     );
-    final descriptionController = TextEditingController(text: room?.description ?? '');
+    final descriptionController = TextEditingController(
+      text: room?.description ?? '',
+    );
     RoomSize selectedSize = room?.size ?? RoomSize.medium;
 
     showDialog(
@@ -699,11 +757,16 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
                     labelText: 'ขนาดห้อง',
                     border: OutlineInputBorder(),
                   ),
-                  items: RoomSize.values.map((size) => DropdownMenuItem(
-                    value: size,
-                    child: Text('${size.code} - ${size.displayName}'),
-                  )).toList(),
-                  onChanged: (size) => setDialogState(() => selectedSize = size!),
+                  items: RoomSize.values
+                      .map(
+                        (size) => DropdownMenuItem(
+                          value: size,
+                          child: Text('${size.code} - ${size.displayName}'),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (size) =>
+                      setDialogState(() => selectedSize = size!),
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -760,7 +823,7 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
                         ? null
                         : descriptionController.text.trim(),
                   );
-                  
+
                   final success = await _mapService.updateRoom(updatedRoom);
                   if (success) {
                     _showSuccessSnackBar('แก้ไขห้องพักสำเร็จ');
@@ -802,7 +865,9 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('ยืนยันการลบ'),
-        content: Text('คุณต้องการลบห้องพัก "${room.name}" หรือไม่?\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้'),
+        content: Text(
+          'คุณต้องการลบห้องพัก "${room.name}" หรือไม่?\n\nการดำเนินการนี้ไม่สามารถย้อนกลับได้',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -859,32 +924,41 @@ class _MapManagementScreenState extends State<MapManagementScreen> with TickerPr
                   ],
                 ),
               ),
-            )
-          else
-            Expanded(
-              child: MapEditor(
-                rooms: _rooms,
-                mapData: _activeMap,
-                onRoomTap: (room) {
-                  setState(() => _selectedRoom = room);
-                },
-                onRoomPositionChanged: (room, offset) async {
-                  final success = await _mapService.updateRoomPosition(
-                    room.id!,
-                    offset.dx,
-                    offset.dy,
-                  );
-                  
-                  if (success) {
-                    _showSuccessSnackBar('อัปเดตตำแหน่งห้อง "${room.name}" สำเร็จ');
-                    await _loadRooms(); // โหลดข้อมูลใหม่
-                    setState(() {}); // บังคับให้ UI อัปเดต
-                  } else {
-                    _showErrorSnackBar('ไม่สามารถวางห้องในตำแหน่งนี้ได้ (ชนกับห้องอื่น)');
-                  }
-                },
-              ),
             ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: MapEditor(
+              rooms: _rooms,
+              mapData: _activeMap,
+              onRoomTap: (room) {
+                setState(() => _selectedRoom = room);
+              },
+              onRoomPositionChanged: (room, offset) async {
+                if (_activeMap == null) {
+                  _showErrorSnackBar('กรุณาตั้งแผนที่หลักก่อน');
+                  return;
+                }
+
+                final success = await _mapService.updateRoomPosition(
+                  room.id!,
+                  offset.dx,
+                  offset.dy,
+                );
+
+                if (success) {
+                  _showSuccessSnackBar(
+                    'อัปเดตตำแหน่งห้อง "${room.name}" สำเร็จ',
+                  );
+                  await _loadRooms(); // โหลดข้อมูลใหม่
+                  setState(() {}); // บังคับให้ UI อัปเดต
+                } else {
+                  _showErrorSnackBar(
+                    'ไม่สามารถวางห้องในตำแหน่งนี้ได้ (ชนกับห้องอื่น)',
+                  );
+                }
+              },
+            ),
+          ),
         ],
       ),
     );

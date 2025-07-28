@@ -31,18 +31,19 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
   final MapService _mapService = MapService();
   Room? _draggedRoom;
   Offset? _dragOffset;
-  final TransformationController _transformationController = TransformationController();
+  final TransformationController _transformationController =
+      TransformationController();
   final GlobalKey _containerKey = GlobalKey();
   Size? _mapImageSize;
   Size? _containerSize;
   bool _isImageLoaded = false;
-  
+
   @override
   void initState() {
     super.initState();
     _loadMapImage();
   }
-  
+
   @override
   void didUpdateWidget(InteractiveMapImproved oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -51,87 +52,128 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
       _loadMapImage();
     }
   }
-  
+
   @override
   void dispose() {
     _transformationController.dispose();
     super.dispose();
   }
-  
+
   Future<void> _loadMapImage() async {
+    // Debug: ตรวจสอบข้อมูลแผนที่
+    debugPrint('=== _loadMapImage Debug ===');
+    debugPrint('MapData: ${widget.mapData?.name}');
+    debugPrint('HasImage: ${widget.mapData?.hasImage}');
+    debugPrint('ImagePath: ${widget.mapData?.imagePath}');
+    debugPrint('IsActive: ${widget.mapData?.isActive}');
+
     if (widget.mapData?.hasImage == true) {
       try {
         final File imageFile = File(widget.mapData!.imagePath!);
-        final bytes = await imageFile.readAsBytes();
-        final ui.Image image = await decodeImageFromList(bytes);
-        
+        debugPrint('Image file exists: ${await imageFile.exists()}');
+        debugPrint('Image file path: ${imageFile.path}');
+
+        if (await imageFile.exists()) {
+          final bytes = await imageFile.readAsBytes();
+          debugPrint('Image file size: ${bytes.length} bytes');
+
+          final ui.Image image = await decodeImageFromList(bytes);
+          debugPrint(
+            'Image decoded successfully: ${image.width}x${image.height}',
+          );
+
+          setState(() {
+            _mapImageSize = Size(
+              image.width.toDouble(),
+              image.height.toDouble(),
+            );
+            _isImageLoaded = true;
+          });
+
+          // Auto-fit image when first loaded
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _autoFitImage();
+          });
+        } else {
+          debugPrint('ERROR: Image file does not exist!');
+          setState(() {
+            _mapImageSize = const Size(1200, 800);
+            _isImageLoaded = true;
+          });
+        }
+      } catch (e) {
+        debugPrint('ERROR loading map image: $e');
         setState(() {
-          _mapImageSize = Size(image.width.toDouble(), image.height.toDouble());
+          _mapImageSize = const Size(1200, 800);
           _isImageLoaded = true;
         });
-        
-        // Auto-fit image when first loaded
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _autoFitImage();
-        });
-      } catch (e) {
-        debugPrint('Error loading map image: $e');
       }
     } else {
+      debugPrint('No image path or hasImage is false');
       setState(() {
         _mapImageSize = const Size(1200, 800); // Default size for grid
         _isImageLoaded = true;
       });
-      
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _autoFitImage();
       });
     }
   }
-  
+
   void _autoFitImage() {
-    final RenderBox? renderBox = _containerKey.currentContext?.findRenderObject() as RenderBox?;
+    final RenderBox? renderBox =
+        _containerKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null || _mapImageSize == null) return;
-    
+
     final containerSize = renderBox.size;
     final imageSize = _mapImageSize!;
-    
+
     // คำนวณ scale ที่เหมาะสมเพื่อให้รูปภาพพอดีกับ container
     final scaleX = containerSize.width / imageSize.width;
     final scaleY = containerSize.height / imageSize.height;
-    final scale = (scaleX < scaleY ? scaleX : scaleY) * 0.9; // ลดลง 10% เพื่อให้มี margin
-    
+    final scale =
+        (scaleX < scaleY ? scaleX : scaleY) * 0.9; // ลดลง 10% เพื่อให้มี margin
+
     // คำนวณตำแหน่งกลางภาพ
     final centerX = imageSize.width / 2;
     final centerY = imageSize.height / 2;
-    
+
     // สร้าง transformation matrix
     final matrix = Matrix4.identity()
       ..translate(-centerX, -centerY) // ย้ายไปที่จุดกลาง
       ..scale(scale) // ปรับขนาด
-      ..translate(containerSize.width / 2, containerSize.height / 2); // ย้ายกลับมากลาง container
-    
+      ..translate(
+        containerSize.width / 2,
+        containerSize.height / 2,
+      ); // ย้ายกลับมากลาง container
+
     _transformationController.value = matrix;
   }
 
   @override
   Widget build(BuildContext context) {
     if (!_isImageLoaded) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
-    
-    final positionedRooms = widget.rooms.where((room) => room.hasPosition).toList();
-    final availableRooms = widget.rooms.where((room) => !room.hasPosition).toList();
-    
+
+    final positionedRooms = widget.rooms
+        .where((room) => room.hasPosition)
+        .toList();
+    final availableRooms = widget.rooms
+        .where((room) => !room.hasPosition)
+        .toList();
+
     return LayoutBuilder(
       builder: (context, constraints) {
         // คำนวณขนาดที่เหมาะสมสำหรับ UI
         final availableHeight = constraints.maxHeight;
-        final roomPanelHeight = widget.isEditable && availableRooms.isNotEmpty ? 140.0 : 0.0;
-        final mapHeight = availableHeight - roomPanelHeight - 16; // 16 for spacing
-        
+        final roomPanelHeight = widget.isEditable && availableRooms.isNotEmpty
+            ? 140.0
+            : 0.0;
+        final mapHeight =
+            availableHeight - roomPanelHeight - 16; // 16 for spacing
+
         return Column(
           children: [
             // Available rooms panel at top (แก้ไข overflow)
@@ -140,10 +182,10 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                 height: roomPanelHeight,
                 child: _buildAvailableRoomsScrollablePanel(availableRooms),
               ),
-            
+
             if (widget.isEditable && availableRooms.isNotEmpty)
               const SizedBox(height: 8),
-            
+
             // Map container with controlled height
             Expanded(
               child: Container(
@@ -185,18 +227,19 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                                 children: [
                                   // Background Map Image or Grid
                                   _buildMapBackground(),
-                                  
+
                                   // Drag target overlay for positioning
                                   if (widget.isEditable)
                                     _buildDragTargetOverlay(),
-                                  
+
                                   // Room widgets that are already positioned
                                   ...positionedRooms.map(
                                     (room) => _buildPositionedRoomWidget(room),
                                   ),
-                                  
+
                                   // Drop zone indicator (when dragging)
-                                  if (_draggedRoom != null && _dragOffset != null)
+                                  if (_draggedRoom != null &&
+                                      _dragOffset != null)
                                     _buildDropZoneIndicator(),
                                 ],
                               );
@@ -215,7 +258,10 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                         Positioned(
                           bottom: 16,
                           left: 16,
-                          child: _buildStatusIndicator(positionedRooms.length, availableRooms.length),
+                          child: _buildStatusIndicator(
+                            positionedRooms.length,
+                            availableRooms.length,
+                          ),
                         ),
                     ],
                   ),
@@ -229,6 +275,13 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
   }
 
   Widget _buildMapBackground() {
+    // Debug: ตรวจสอบข้อมูลแผนที่
+    debugPrint('=== _buildMapBackground Debug ===');
+    debugPrint('MapData: ${widget.mapData?.name}');
+    debugPrint('HasImage: ${widget.mapData?.hasImage}');
+    debugPrint('ImagePath: ${widget.mapData?.imagePath}');
+    debugPrint('MapImageSize: $_mapImageSize');
+
     return Container(
       width: _mapImageSize?.width ?? 1200,
       height: _mapImageSize?.height ?? 800,
@@ -236,7 +289,11 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
           ? Image.file(
               File(widget.mapData!.imagePath!),
               fit: BoxFit.cover, // เปลี่ยนกลับเป็น cover เพื่อคงอัตราส่วน
-              errorBuilder: (context, error, stackTrace) => _buildGridBackground(),
+              errorBuilder: (context, error, stackTrace) {
+                debugPrint('ERROR loading image in UI: $error');
+                debugPrint('Stack trace: $stackTrace');
+                return _buildGridBackground();
+              },
               // เพิ่ม cache สำหรับปรับปรุงประสิทธิภาพ
               cacheWidth: 1920, // จำกัดความกว้างสูงสุด
               cacheHeight: 1920, // จำกัดความสูงสูงสุด
@@ -249,10 +306,75 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
+        border: Border.all(color: Colors.grey.shade300, width: 1),
       ),
-      child: CustomPaint(
-        painter: GridPainter(),
-        size: Size(_mapImageSize?.width ?? 1200, _mapImageSize?.height ?? 800),
+      child: Stack(
+        children: [
+          CustomPaint(
+            painter: GridPainter(),
+            size: Size(
+              _mapImageSize?.width ?? 1200,
+              _mapImageSize?.height ?? 800,
+            ),
+          ),
+          // แสดงข้อความเมื่อไม่มีแผนที่
+          if (widget.mapData == null)
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.map_outlined,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'ไม่มีแผนที่',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'กรุณาตั้งแผนที่หลักในแท็บ "แผนที่"',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            )
+          else if (widget.mapData!.hasImage == false)
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.image_not_supported,
+                    size: 64,
+                    color: Colors.grey.shade400,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'ไม่มีภาพแผนที่',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'กรุณาเพิ่มภาพแผนที่ในแท็บ "แผนที่"',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -301,10 +423,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                 Flexible(
                   child: Text(
                     'ลากห้องมาวางบนแผนที่',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -343,7 +462,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
 
   Widget _buildImprovedDraggableRoomCard(Room room) {
     final (width, height) = room.getSizeForUI();
-    
+
     return Container(
       width: 110,
       margin: const EdgeInsets.symmetric(horizontal: 6),
@@ -372,16 +491,12 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.open_with,
-                    color: Colors.grey.shade600,
-                    size: 24,
-                  ),
+                  Icon(Icons.open_with, color: Colors.grey.shade600, size: 24),
                   const SizedBox(height: 4),
                   Text(
                     'กำลังลาก',
                     style: TextStyle(
-                      color: Colors.grey.shade600, 
+                      color: Colors.grey.shade600,
                       fontSize: 10,
                       fontWeight: FontWeight.w500,
                     ),
@@ -397,6 +512,16 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
           });
         },
         onDragEnd: (details) {
+          // เมื่อปล่อย drag ให้วางห้องที่ตำแหน่งที่ปล่อย
+          if (widget.onRoomPositionChanged != null) {
+            final RenderBox? renderBox =
+                _containerKey.currentContext?.findRenderObject() as RenderBox?;
+            if (renderBox != null) {
+              final localPosition = renderBox.globalToLocal(details.offset);
+              _handleRoomDrop(room, localPosition);
+            }
+          }
+
           setState(() {
             _draggedRoom = null;
             _dragOffset = null;
@@ -437,7 +562,9 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: _getRoomStatusColor(room.status).withValues(alpha: 0.2),
+                    color: _getRoomStatusColor(
+                      room.status,
+                    ).withValues(alpha: 0.2),
                     border: Border.all(
                       color: _getRoomStatusColor(room.status),
                       width: 2,
@@ -483,24 +610,33 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
   // Widget สำหรับห้องที่วางตำแหน่งแล้ว
   Widget _buildPositionedRoomWidget(Room room) {
     final (width, height) = room.getSizeForUI();
-    
+
     // คำนวณตำแหน่งจาก percentage เป็น absolute position
     final imageSize = _mapImageSize ?? const Size(1200, 800);
     final absoluteX = (room.positionX! / 100) * imageSize.width;
     final absoluteY = (room.positionY! / 100) * imageSize.height;
-    
-    return Positioned(
-      left: absoluteX - (width / 2),
-      top: absoluteY - (height / 2),
+
+    return Transform.translate(
+      offset: Offset(absoluteX - (width / 2), absoluteY - (height / 2)),
       child: widget.isEditable
           ? Draggable<Room>(
               data: room,
               feedback: Material(
                 elevation: 12,
                 borderRadius: BorderRadius.circular(8),
-                child: _buildRoomContainer(room, width, height, isDragging: true),
+                child: _buildRoomContainer(
+                  room,
+                  width,
+                  height,
+                  isDragging: true,
+                ),
               ),
-              childWhenDragging: _buildRoomContainer(room, width, height, isPlaceholder: true),
+              childWhenDragging: _buildRoomContainer(
+                room,
+                width,
+                height,
+                isPlaceholder: true,
+              ),
               onDragStarted: () {
                 setState(() {
                   _draggedRoom = room;
@@ -525,25 +661,21 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
             ),
     );
   }
-  
+
   // สร้าง overlay สำหรับรับ drag target ทั่วแผนที่ (ปรับปรุงการทำงาน)
   Widget _buildDragTargetOverlay() {
     final imageSize = _mapImageSize ?? const Size(1200, 800);
-    
+
     return Positioned.fill(
       child: DragTarget<Room>(
         onAcceptWithDetails: (details) {
           // จัดการการวางห้องเมื่อปล่อย drag
           if (widget.onRoomPositionChanged != null && details.data != null) {
-            final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+            final RenderBox? renderBox =
+                _containerKey.currentContext?.findRenderObject() as RenderBox?;
             if (renderBox != null) {
               final localPosition = renderBox.globalToLocal(details.offset);
-              
-              // แปลงเป็น percentage
-              final percentX = (localPosition.dx / imageSize.width * 100).clamp(0.0, 100.0);
-              final percentY = (localPosition.dy / imageSize.height * 100).clamp(0.0, 100.0);
-              
-              widget.onRoomPositionChanged!(details.data!, Offset(percentX, percentY));
+              _handleRoomDrop(details.data!, localPosition);
             }
           }
         },
@@ -552,45 +684,12 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
         },
         builder: (context, candidateData, rejectedData) {
           final isDragging = candidateData.isNotEmpty;
-          
-          return GestureDetector(
-            onTapDown: (details) {
-              // ถ้ามีห้องที่กำลัง drag อยู่ ให้วางที่ตำแหน่งที่คลิก
-              if (_draggedRoom != null && widget.onRoomPositionChanged != null) {
-                final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
-                if (renderBox != null) {
-                  final localPosition = details.localPosition;
-                  
-                  // แปลงเป็น percentage
-                  final percentX = (localPosition.dx / imageSize.width * 100).clamp(0.0, 100.0);
-                  final percentY = (localPosition.dy / imageSize.height * 100).clamp(0.0, 100.0);
-                  
-                  widget.onRoomPositionChanged!(_draggedRoom!, Offset(percentX, percentY));
-                  
-                  setState(() {
-                    _draggedRoom = null;
-                    _dragOffset = null;
-                  });
-                }
-              }
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: double.infinity,
-              height: double.infinity,
-              decoration: BoxDecoration(
-                color: isDragging 
-                  ? Colors.blue.withValues(alpha: 0.15)
-                  : Colors.transparent,
-                border: isDragging 
-                  ? Border.all(
-                      color: Colors.blue.withValues(alpha: 0.5), 
-                      width: 2,
-                      strokeAlign: BorderSide.strokeAlignInside,
-                    )
-                  : null,
-              ),
-              child: isDragging 
+
+          return Container(
+            width: double.infinity,
+            height: double.infinity,
+            color: Colors.transparent,
+            child: isDragging
                 ? Stack(
                     children: [
                       // Grid pattern when dragging
@@ -601,7 +700,10 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                       // Center instruction
                       Center(
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 16,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.blue.withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(12),
@@ -632,9 +734,10 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                candidateData.isNotEmpty && candidateData.first != null
-                                  ? 'กำลังวาง: ${candidateData.first!.name}'
-                                  : '',
+                                candidateData.isNotEmpty &&
+                                        candidateData.first != null
+                                    ? 'กำลังวาง: ${candidateData.first!.name}'
+                                    : '',
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 12,
@@ -647,10 +750,45 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
                     ],
                   )
                 : null,
-            ),
           );
         },
       ),
+    );
+  }
+
+  // ฟังก์ชันใหม่สำหรับจัดการการวางห้อง (แก้ไขการคำนวณตำแหน่ง)
+  void _handleRoomDrop(Room room, Offset localPosition) {
+    if (widget.onRoomPositionChanged == null) return;
+
+    // หา RenderBox ของ InteractiveViewer
+    final RenderBox? renderBox =
+        _containerKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    final containerSize = renderBox.size;
+    final imageSize = _mapImageSize ?? const Size(1200, 800);
+
+    // คำนวณ scale ปัจจุบันของ InteractiveViewer
+    final matrix = _transformationController.value;
+    final currentScale = matrix.getMaxScaleOnAxis();
+
+    // คำนวณ offset ของ InteractiveViewer (pan)
+    final offsetX = matrix.getTranslation().x;
+    final offsetY = matrix.getTranslation().y;
+
+    // แปลงตำแหน่ง local เป็นตำแหน่งในภาพ (คำนึงถึง zoom และ pan)
+    final imageX = (localPosition.dx - offsetX) / currentScale;
+    final imageY = (localPosition.dy - offsetY) / currentScale;
+
+    // แปลงเป็น percentage และ clamp ให้อยู่ในขอบเขต
+    final percentX = (imageX / imageSize.width * 100).clamp(0.0, 100.0);
+    final percentY = (imageY / imageSize.height * 100).clamp(0.0, 100.0);
+
+    // เรียก callback พร้อมตำแหน่งที่ถูกต้อง
+    widget.onRoomPositionChanged!(room, Offset(percentX, percentY));
+
+    debugPrint(
+      'Drop position: local(${localPosition.dx}, ${localPosition.dy}) -> image(${imageX}, ${imageY}) -> percent(${percentX}, ${percentY})',
     );
   }
 
@@ -687,12 +825,12 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     Color backgroundColor;
     Color borderColor;
     IconData icon;
-    
+
     // กำหนดสีตามสถานะ
     backgroundColor = _getRoomStatusColor(room.status).withValues(alpha: 0.1);
     borderColor = _getRoomStatusColor(room.status);
     icon = _getRoomStatusIcon(room.status);
-    
+
     if (isPlaceholder) {
       backgroundColor = Colors.grey.shade200;
       borderColor = Colors.grey.shade400;
@@ -704,41 +842,40 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
       width: width,
       height: height,
       decoration: BoxDecoration(
-        gradient: isDragging 
-          ? LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                backgroundColor,
-                backgroundColor.withValues(alpha: 0.7),
-              ],
-            )
-          : null,
+        gradient: isDragging
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  backgroundColor,
+                  backgroundColor.withValues(alpha: 0.7),
+                ],
+              )
+            : null,
         color: isDragging ? null : backgroundColor,
-        border: Border.all(
-          color: borderColor,
-          width: isDragging ? 3 : 2,
-        ),
+        border: Border.all(color: borderColor, width: isDragging ? 3 : 2),
         borderRadius: BorderRadius.circular(8),
-        boxShadow: isDragging ? [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-            spreadRadius: 2,
-          ),
-          BoxShadow(
-            color: borderColor.withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ] : [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 2,
-            offset: const Offset(0, 1),
-          ),
-        ],
+        boxShadow: isDragging
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                  spreadRadius: 2,
+                ),
+                BoxShadow(
+                  color: borderColor.withValues(alpha: 0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 2,
+                  offset: const Offset(0, 1),
+                ),
+              ],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -752,7 +889,11 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
             child: Icon(
               icon,
               color: borderColor,
-              size: height > 35 ? 18 : height > 25 ? 14 : 10,
+              size: height > 35
+                  ? 18
+                  : height > 25
+                  ? 14
+                  : 10,
             ),
           ),
           if (height > 30) ...[
@@ -761,7 +902,11 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
               child: Text(
                 room.name,
                 style: TextStyle(
-                  fontSize: width > 80 ? 12 : width > 60 ? 10 : 9,
+                  fontSize: width > 80
+                      ? 12
+                      : width > 60
+                      ? 10
+                      : 9,
                   fontWeight: FontWeight.bold,
                   color: borderColor,
                 ),
@@ -787,7 +932,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
 
   Widget _buildDropZoneIndicator() {
     if (_dragOffset == null) return const SizedBox.shrink();
-    
+
     // แสดง indicator ตามตำแหน่งเมาส์
     return Positioned(
       left: _dragOffset!.dx - 35,
@@ -810,11 +955,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.location_on,
-              color: Colors.green,
-              size: 20,
-            ),
+            const Icon(Icons.location_on, color: Colors.green, size: 20),
             const SizedBox(height: 2),
             Text(
               _draggedRoom!.name,
@@ -851,7 +992,8 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
         children: [
           IconButton(
             onPressed: () {
-              final currentScale = _transformationController.value.getMaxScaleOnAxis();
+              final currentScale = _transformationController.value
+                  .getMaxScaleOnAxis();
               final newScale = (currentScale * 1.2).clamp(0.1, 5.0);
               final matrix = Matrix4.identity()..scale(newScale);
               _transformationController.value = matrix;
@@ -862,7 +1004,8 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
           const Divider(height: 1),
           IconButton(
             onPressed: () {
-              final currentScale = _transformationController.value.getMaxScaleOnAxis();
+              final currentScale = _transformationController.value
+                  .getMaxScaleOnAxis();
               final newScale = (currentScale / 1.2).clamp(0.1, 5.0);
               final matrix = Matrix4.identity()..scale(newScale);
               _transformationController.value = matrix;
@@ -880,7 +1023,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
       ),
     );
   }
-  
+
   // เพิ่ม Status Indicator Widget
   Widget _buildStatusIndicator(int positionedCount, int availableCount) {
     return Card(
@@ -891,11 +1034,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.info_outline,
-              size: 16,
-              color: Colors.blue.shade700,
-            ),
+            Icon(Icons.info_outline, size: 16, color: Colors.blue.shade700),
             const SizedBox(width: 8),
             Text(
               'วางแล้ว: $positionedCount | รอวาง: $availableCount',
@@ -923,20 +1062,12 @@ class GridPainter extends CustomPainter {
 
     // วาดเส้นแนวตั้ง
     for (double x = 0; x <= size.width; x += gridSize) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        paint,
-      );
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
 
     // วาดเส้นแนวนอน
     for (double y = 0; y <= size.height; y += gridSize) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        paint,
-      );
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
   }
 
@@ -964,15 +1095,22 @@ class DashedBorderPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     final path = Path()
-      ..addRRect(RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, 0, size.width, size.height),
-        const Radius.circular(8),
-      ));
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(0, 0, size.width, size.height),
+          const Radius.circular(8),
+        ),
+      );
 
     _drawDashedPath(canvas, path, dashPattern, paint);
   }
 
-  void _drawDashedPath(Canvas canvas, Path path, List<double> pattern, Paint paint) {
+  void _drawDashedPath(
+    Canvas canvas,
+    Path path,
+    List<double> pattern,
+    Paint paint,
+  ) {
     final pathMetrics = path.computeMetrics();
     for (final pathMetric in pathMetrics) {
       double distance = 0.0;
@@ -1005,23 +1143,15 @@ class DropZoneGridPainter extends CustomPainter {
       ..style = PaintingStyle.stroke;
 
     const double gridSize = 50.0;
-    
+
     // วาดเส้นแนวตั้ง
     for (double x = 0; x <= size.width; x += gridSize) {
-      canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.height),
-        paint,
-      );
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
     }
 
     // วาดเส้นแนวนอน
     for (double y = 0; y <= size.height; y += gridSize) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        paint,
-      );
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
     }
   }
 
@@ -1115,7 +1245,7 @@ class _MapEditorState extends State<MapEditor> {
               ),
             ),
           ),
-        
+
         // Map
         Expanded(
           child: InteractiveMapImproved(
@@ -1129,7 +1259,7 @@ class _MapEditorState extends State<MapEditor> {
             onRoomPositionChanged: widget.onRoomPositionChanged,
           ),
         ),
-        
+
         // Instructions
         const Card(
           margin: EdgeInsets.only(top: 16),

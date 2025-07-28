@@ -7,6 +7,8 @@ import 'dart:async';
 import 'admin_settings.dart';
 import 'daily_summary.dart';
 import 'visitor_management.dart';
+import 'about_page.dart';
+import 'schedule_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -180,7 +182,10 @@ class _HomeScreenState extends State<HomeScreen> {
         'label': 'ตารางกิจกรรม',
         'icon': Icons.event_note,
         'enabled': _scheduleEnabled,
-        'onTap': () => _showWip(context),
+        'onTap': () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ScheduleScreen()),
+        ),
       },
       {
         'label': 'สรุปผลประจำวัน',
@@ -212,6 +217,21 @@ class _HomeScreenState extends State<HomeScreen> {
               const Text(
                 'บ้านเพชรบำเพ็ญ',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AboutPage()),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  child: const Icon(
+                    Icons.info_outline,
+                    color: Colors.grey,
+                    size: 20,
+                  ),
+                ),
               ),
               // Show tap count for debugging in debug mode
               if (kDebugMode && _logoTapCount > 0) ...[

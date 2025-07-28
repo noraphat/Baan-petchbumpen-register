@@ -40,17 +40,16 @@ class _VisitorHistoryScreenState extends State<VisitorHistoryScreen> {
       stays.sort((a, b) => b.startDate.compareTo(a.startDate)); // เรียงจากใหม่ไปเก่า (DESC)
       
       // ดึงข้อมูลเพิ่มเติม (equipment และ location) ของแต่ละครั้ง
-      List<RegAdditionalInfo> additionalInfos = [];
-      for (final stay in stays) {
-        final info = await dbHelper.fetchAdditionalInfo(stay.visitorId);
-        if (info != null) {
-          additionalInfos.add(info);
-        }
-      }
+      final allAdditionalInfos = await dbHelper.fetchAllAdditionalInfoByRegId(widget.visitor.id);
+      
+      // ตอนนี้ stays และ additionalInfos จะมีข้อมูลแยกกันแต่ละ visit
+      // เนื่องจากแต่ละ visit จะมี visitId ที่ไม่ซ้ำกัน
+      // เราจะแสดงข้อมูล stays ตาม createdAt และแสดง additional infos ทั้งหมด
+      allAdditionalInfos.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       
       setState(() {
         _allStays = stays;
-        _additionalInfos = additionalInfos;
+        _additionalInfos = allAdditionalInfos;
         _totalPages = (_allStays.length / _itemsPerPage).ceil();
         if (_totalPages == 0) _totalPages = 1;
         _updateDisplayedStays();
@@ -86,11 +85,26 @@ class _VisitorHistoryScreenState extends State<VisitorHistoryScreen> {
     );
   }
 
-  RegAdditionalInfo? _findAdditionalInfo(String visitorId) {
+  RegAdditionalInfo? _findAdditionalInfo(StayRecord stay) {
     try {
-      return _additionalInfos.firstWhere((info) => info.regId == visitorId);
+      // จับคู่โดยใช้ visitId ที่สร้างจาก stay.createdAt
+      final expectedVisitId = '${stay.visitorId}_${stay.createdAt.millisecondsSinceEpoch}';
+      return _additionalInfos.firstWhere((info) => info.visitId == expectedVisitId);
     } catch (e) {
-      return null;
+      // ถ้าหาไม่เจอ (อาจเป็นข้อมูลเก่าที่ยังไม่มี visitId ที่ถูกต้อง)
+      // ให้หาโดยใช้เวลาที่ใกล้เคียงกัน
+      try {
+        return _additionalInfos.firstWhere((info) {
+          final timeDiff = stay.createdAt.difference(info.createdAt).abs();
+          return timeDiff.inMinutes <= 5; // สร้างห่างกันไม่เกิน 5 นาที
+        });
+      } catch (e2) {
+        // ถ้ายังหาไม่เจอ ให้ return ข้อมูลล่าสุด
+        if (_additionalInfos.isNotEmpty) {
+          return _additionalInfos.first;
+        }
+        return null;
+      }
     }
   }
 
@@ -184,7 +198,7 @@ class _VisitorHistoryScreenState extends State<VisitorHistoryScreen> {
                               itemCount: _displayedStays.length,
                               itemBuilder: (context, index) {
                                 final stay = _displayedStays[index];
-                                final additionalInfo = _findAdditionalInfo(stay.visitorId);
+                                final additionalInfo = _findAdditionalInfo(stay);
                                 // คำนวณหมายเลขครั้งที่ (เรียงจากใหม่สุดเป็นครั้งที่ 1)
                                 final globalIndex = (_currentPage - 1) * _itemsPerPage + index;
                                 final stayNumber = globalIndex + 1;

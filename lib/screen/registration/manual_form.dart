@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
-import 'dart:convert';
+import 'package:flutter/services.dart';
 import '../../models/reg_data.dart';
 import '../../services/db_helper.dart';
 import '../../services/address_service.dart';
 import '../../services/menu_settings_service.dart';
 import '../../services/printer_service.dart';
 import '../../widgets/buddhist_calendar_picker.dart';
+import '../../utils/phone_validator.dart';
 
 class ManualForm extends StatefulWidget {
   const ManualForm({super.key});
@@ -373,8 +374,8 @@ class _ManualFormState extends State<ManualForm> {
                                   setState(() {
                                     _selectedDob = date;
                                     dobCtrl.text =
-                                        '${date.day} '
-                                        '${DateFormat.MMMM('th_TH').format(date)} '
+                                        '${date.day.toString().padLeft(2, '0')}/'
+                                        '${date.month.toString().padLeft(2, '0')}/'
                                         '${date.year + 543}';
                                   });
                                   Navigator.pop(context);
@@ -398,7 +399,9 @@ class _ManualFormState extends State<ManualForm> {
               label: 'เบอร์โทรศัพท์',
               controller: phoneCtrl,
               enabled: true,
-              keyboard: TextInputType.phone,
+              keyboard: TextInputType.number,
+              validator: PhoneValidator.validatePhone,
+              inputFormatters: PhoneValidator.getPhoneInputFormatters(),
               onChanged: null,
             ),
             DropdownButtonFormField<int>(
@@ -509,6 +512,8 @@ class _ManualFormState extends State<ManualForm> {
     FocusNode? focus,
     TextInputType keyboard = TextInputType.text,
     ValueChanged<String>? onChanged,
+    String? Function(String?)? validator,
+    List<TextInputFormatter>? inputFormatters,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
@@ -518,12 +523,13 @@ class _ManualFormState extends State<ManualForm> {
         focusNode: focus,
         maxLines: lines,
         keyboardType: keyboard,
+        inputFormatters: inputFormatters,
         decoration: InputDecoration(labelText: label),
-        validator: mandatory && !enabled
+        validator: validator ?? (mandatory && !enabled
             ? null
             : (mandatory
                   ? (v) => (v == null || v.isEmpty) ? 'ระบุ $label' : null
-                  : null),
+                  : null)),
         onChanged: onChanged,
       ),
     );
@@ -853,9 +859,13 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
         stayRecordForPrint = updatedStay;
       }
 
-      // บันทึกข้อมูลอุปกรณ์ (ไม่เก็บ startDate/endDate ใน additional_info เพราะย้ายไป stays table แล้ว)
+      // บันทึกข้อมูลอุปกรณ์แยกสำหรับแต่ละการมาปฏิบัติธรรม
+      // สร้าง unique visitId โดยใช้ createdAt ของ stay record
+      final visitId = '${widget.regId}_${stayRecordForPrint!.createdAt.millisecondsSinceEpoch}';
+      
       final additionalInfo = RegAdditionalInfo.create(
         regId: widget.regId,
+        visitId: visitId, // ใช้ unique visitId สำหรับครั้งนี้
         startDate: null, // ไม่เก็บในนี้แล้ว ให้อ่านจาก stays table
         endDate: null, // ไม่เก็บในนี้แล้ว ให้อ่านจาก stays table
         shirtCount: int.tryParse(shirtCtrl.text) ?? 0,

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../services/db_helper.dart';
 import '../services/menu_settings_service.dart';
 import 'developer_settings.dart';
+import 'data_management_screen.dart';
+import 'map_management_screen.dart';
 
 class AdminSettings extends StatefulWidget {
   const AdminSettings({super.key});
@@ -359,11 +361,19 @@ class _AdminSettingsState extends State<AdminSettings> {
             
             // Data Management Section
             _buildSectionHeader('จัดการข้อมูล', Icons.storage),
-            _buildActionButton('ดูสถิติฐานข้อมูล', Icons.bar_chart, _showStatistics),
+            _buildActionButton('จัดการข้อมูล', Icons.storage, () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DataManagementScreen()),
+              );
+            }),
+            _buildActionButton('จัดการแผนที่และห้องพัก', Icons.map, () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MapManagementScreen()),
+              );
+            }),
             _buildActionButton('ทดสอบระบบ', Icons.science, _runSystemTest),
-            _buildActionButton('ล้างข้อมูลทดสอบ', Icons.cleaning_services, _clearTestData),
-            _buildActionButton('สร้างข้อมูลทดสอบ', Icons.build, _createTestData),
-            _buildActionButton('ล้างข้อมูลทั้งหมด', Icons.warning, _clearAllData, color: Colors.red),
             
             // Backup Section
             _buildSectionHeader('สำรองข้อมูล', Icons.save),

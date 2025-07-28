@@ -150,9 +150,19 @@ class _BuddhistCalendarPickerState extends State<BuddhistCalendarPicker> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             IconButton(onPressed: _goToPreviousMonth, icon: const Icon(Icons.chevron_left)),
-            TextButton(
-              onPressed: _selectYear,
-              child: Text('$thaiMonth $yearBE', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Expanded(
+              child: TextButton(
+                onPressed: _selectYear,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    '$thaiMonth $yearBE', 
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
             ),
             IconButton(onPressed: _goToNextMonth, icon: const Icon(Icons.chevron_right)),
           ],

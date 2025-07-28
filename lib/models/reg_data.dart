@@ -145,7 +145,9 @@ class RegData {
 }
 
 class RegAdditionalInfo {
+  final int? id;                // Auto-increment ID (PK)
   final String regId;           // เชื่อมกับ RegData
+  final String visitId;         // Unique visit identifier สำหรับแยกแต่ละครั้งที่มา
   final DateTime? startDate;    // วันที่เริ่มต้น
   final DateTime? endDate;      // วันที่สิ้นสุด
   final int? shirtCount;        // จำนวนเสื้อขาว
@@ -161,7 +163,9 @@ class RegAdditionalInfo {
   final DateTime updatedAt;     // วันที่แก้ไขล่าสุด
 
   RegAdditionalInfo({
+    this.id,
     required this.regId,
+    required this.visitId,
     this.startDate,
     this.endDate,
     this.shirtCount,
@@ -178,7 +182,9 @@ class RegAdditionalInfo {
   });
 
   Map<String, dynamic> toMap() => {
+        if (id != null) 'id': id,
         'regId': regId,
+        'visitId': visitId,
         'startDate': startDate?.toIso8601String(),
         'endDate': endDate?.toIso8601String(),
         'shirtCount': shirtCount,
@@ -195,7 +201,9 @@ class RegAdditionalInfo {
       };
 
   factory RegAdditionalInfo.fromMap(Map<String, dynamic> m) => RegAdditionalInfo(
+        id: m['id'],
         regId: m['regId'],
+        visitId: m['visitId'] ?? m['regId'], // fallback for old data
         startDate: m['startDate'] != null ? DateTime.parse(m['startDate']) : null,
         endDate: m['endDate'] != null ? DateTime.parse(m['endDate']) : null,
         shirtCount: m['shirtCount'],
@@ -214,6 +222,7 @@ class RegAdditionalInfo {
   // สร้างข้อมูลเพิ่มเติมใหม่
   factory RegAdditionalInfo.create({
     required String regId,
+    String? visitId,
     DateTime? startDate,
     DateTime? endDate,
     int? shirtCount,
@@ -225,25 +234,33 @@ class RegAdditionalInfo {
     bool withChildren = false,
     int? childrenCount,
     String? notes,
-  }) => RegAdditionalInfo(
-        regId: regId,
-        startDate: startDate,
-        endDate: endDate,
-        shirtCount: shirtCount,
-        pantsCount: pantsCount,
-        matCount: matCount,
-        pillowCount: pillowCount,
-        blanketCount: blanketCount,
-        location: location,
-        withChildren: withChildren,
-        childrenCount: childrenCount,
-        notes: notes,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
+  }) {
+    final now = DateTime.now();
+    final generatedVisitId = visitId ?? '${regId}_${now.millisecondsSinceEpoch}';
+    
+    return RegAdditionalInfo(
+      regId: regId,
+      visitId: generatedVisitId,
+      startDate: startDate,
+      endDate: endDate,
+      shirtCount: shirtCount,
+      pantsCount: pantsCount,
+      matCount: matCount,
+      pillowCount: pillowCount,
+      blanketCount: blanketCount,
+      location: location,
+      withChildren: withChildren,
+      childrenCount: childrenCount,
+      notes: notes,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
 
   // อัปเดตข้อมูลเพิ่มเติม
   RegAdditionalInfo copyWith({
+    int? id,
+    String? visitId,
     DateTime? startDate,
     DateTime? endDate,
     int? shirtCount,
@@ -257,7 +274,9 @@ class RegAdditionalInfo {
     String? notes,
     DateTime? updatedAt,
   }) => RegAdditionalInfo(
+        id: id ?? this.id,
         regId: regId,
+        visitId: visitId ?? this.visitId,
         startDate: startDate ?? this.startDate,
         endDate: endDate ?? this.endDate,
         shirtCount: shirtCount ?? this.shirtCount,

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../models/reg_data.dart';
 import '../services/db_helper.dart';
 import '../services/address_service.dart';
+import '../widgets/buddhist_calendar_picker.dart';
+import '../utils/phone_validator.dart';
 
 class VisitorEditScreen extends StatefulWidget {
   final RegData visitor;
@@ -28,6 +30,7 @@ class _VisitorEditScreenState extends State<VisitorEditScreen> {
   District? _selectedDistrict;
   SubDistrict? _selectedSubDistrict;
   String _selectedGender = 'ชาย';
+  DateTime? _selectedDob;
   
   bool _isLoading = false;
   bool _isAddressLoaded = false;
@@ -45,6 +48,22 @@ class _VisitorEditScreenState extends State<VisitorEditScreen> {
     _phoneController = TextEditingController(text: widget.visitor.phone);
     _dobController = TextEditingController(text: widget.visitor.dob);
     _selectedGender = widget.visitor.gender;
+    
+    // Parse existing DOB if available
+    if (widget.visitor.dob.isNotEmpty) {
+      try {
+        // Try to parse different formats
+        final parts = widget.visitor.dob.split('/');
+        if (parts.length == 3) {
+          final day = int.parse(parts[0]);
+          final month = int.parse(parts[1]);
+          final year = int.parse(parts[2]) - 543; // Convert from Buddhist to Christian era
+          _selectedDob = DateTime(year, month, day);
+        }
+      } catch (e) {
+        // If parsing fails, leave _selectedDob as null
+      }
+    }
   }
 
   Future<void> _loadAddressData() async {
@@ -82,6 +101,32 @@ class _VisitorEditScreenState extends State<VisitorEditScreen> {
     _dobController.dispose();
     _additionalAddressController.dispose();
     super.dispose();
+  }
+
+  void _showDatePicker() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('เลือกวันเกิด'),
+        content: SizedBox(
+          width: 350,
+          height: 400,
+          child: BuddhistCalendarPicker(
+            initialDate: _selectedDob,
+            onDateSelected: (date) {
+              setState(() {
+                _selectedDob = date;
+                _dobController.text =
+                    '${date.day.toString().padLeft(2, '0')}/'
+                    '${date.month.toString().padLeft(2, '0')}/'
+                    '${date.year + 543}';
+              });
+              Navigator.pop(context);
+            },
+          ),
+        ),
+      ),
+    );
   }
 
   void _onProvinceChanged(Province? province) {
@@ -255,19 +300,25 @@ class _VisitorEditScreenState extends State<VisitorEditScreen> {
                               ),
                               const SizedBox(height: 16),
                               
-                              TextFormField(
-                                controller: _dobController,
-                                decoration: const InputDecoration(
-                                  labelText: 'วันเกิด',
-                                  border: OutlineInputBorder(),
-                                  hintText: 'เช่น 15 มกราคม 2530',
+                              GestureDetector(
+                                onTap: () => _showDatePicker(),
+                                child: AbsorbPointer(
+                                  child: TextFormField(
+                                    controller: _dobController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'วันเกิด (พ.ศ.)',
+                                      border: OutlineInputBorder(),
+                                      hintText: 'กดเพื่อเลือกวันเกิด',
+                                      suffixIcon: Icon(Icons.calendar_today),
+                                    ),
+                                    validator: (value) {
+                                      if (value == null || value.trim().isEmpty) {
+                                        return 'กรุณาเลือกวันเกิด';
+                                      }
+                                      return null;
+                                    },
+                                  ),
                                 ),
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return 'กรุณากรอกวันเกิด';
-                                  }
-                                  return null;
-                                },
                               ),
                               const SizedBox(height: 16),
                               
@@ -298,7 +349,9 @@ class _VisitorEditScreenState extends State<VisitorEditScreen> {
                                 labelText: 'เบอร์โทรศัพท์',
                                 border: OutlineInputBorder(),
                               ),
-                              keyboardType: TextInputType.phone,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: PhoneValidator.getPhoneInputFormatters(),
+                              validator: PhoneValidator.validatePhone,
                             ),
                           ],
                         ),

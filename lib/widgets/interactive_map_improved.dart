@@ -41,15 +41,26 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
   @override
   void initState() {
     super.initState();
+    debugPrint('=== InteractiveMapImproved initState ===');
+    debugPrint('MapData in initState: ${widget.mapData?.name}');
     _loadMapImage();
   }
 
   @override
   void didUpdateWidget(InteractiveMapImproved oldWidget) {
     super.didUpdateWidget(oldWidget);
+    debugPrint('=== InteractiveMapImproved didUpdateWidget ===');
+    debugPrint('Old MapData: ${oldWidget.mapData?.name}');
+    debugPrint('New MapData: ${widget.mapData?.name}');
+    debugPrint('Old ID: ${oldWidget.mapData?.id}');
+    debugPrint('New ID: ${widget.mapData?.id}');
+
     // โหลดแผนที่ใหม่หากมีการเปลี่ยนแปลง
     if (oldWidget.mapData?.id != widget.mapData?.id) {
+      debugPrint('MapData changed, calling _loadMapImage()');
       _loadMapImage();
+    } else {
+      debugPrint('MapData not changed, skipping _loadMapImage()');
     }
   }
 
@@ -67,7 +78,12 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     debugPrint('ImagePath: ${widget.mapData?.imagePath}');
     debugPrint('IsActive: ${widget.mapData?.isActive}');
 
-    if (widget.mapData?.hasImage == true) {
+    // รีเซ็ตสถานะก่อนโหลดใหม่
+    setState(() {
+      _isImageLoaded = false;
+    });
+
+    if (widget.mapData?.hasImage == true && widget.mapData?.imagePath != null) {
       try {
         final File imageFile = File(widget.mapData!.imagePath!);
         debugPrint('Image file exists: ${await imageFile.exists()}');
@@ -82,42 +98,54 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
             'Image decoded successfully: ${image.width}x${image.height}',
           );
 
-          setState(() {
-            _mapImageSize = Size(
-              image.width.toDouble(),
-              image.height.toDouble(),
-            );
-            _isImageLoaded = true;
-          });
+          if (mounted) {
+            setState(() {
+              _mapImageSize = Size(
+                image.width.toDouble(),
+                image.height.toDouble(),
+              );
+              _isImageLoaded = true;
+            });
 
-          // Auto-fit image when first loaded
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _autoFitImage();
-          });
+            // Auto-fit image when first loaded
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _autoFitImage();
+              }
+            });
+          }
         } else {
           debugPrint('ERROR: Image file does not exist!');
+          if (mounted) {
+            setState(() {
+              _mapImageSize = const Size(1200, 800);
+              _isImageLoaded = true;
+            });
+          }
+        }
+      } catch (e) {
+        debugPrint('ERROR loading map image: $e');
+        if (mounted) {
           setState(() {
             _mapImageSize = const Size(1200, 800);
             _isImageLoaded = true;
           });
         }
-      } catch (e) {
-        debugPrint('ERROR loading map image: $e');
-        setState(() {
-          _mapImageSize = const Size(1200, 800);
-          _isImageLoaded = true;
-        });
       }
     } else {
       debugPrint('No image path or hasImage is false');
-      setState(() {
-        _mapImageSize = const Size(1200, 800); // Default size for grid
-        _isImageLoaded = true;
-      });
+      if (mounted) {
+        setState(() {
+          _mapImageSize = const Size(1200, 800); // Default size for grid
+          _isImageLoaded = true;
+        });
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _autoFitImage();
-      });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _autoFitImage();
+          }
+        });
+      }
     }
   }
 
@@ -129,31 +157,42 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     final containerSize = renderBox.size;
     final imageSize = _mapImageSize!;
 
+    debugPrint('AutoFit - Container: ${containerSize}, Image: ${imageSize}');
+
     // คำนวณ scale ที่เหมาะสมเพื่อให้รูปภาพพอดีกับ container
     final scaleX = containerSize.width / imageSize.width;
     final scaleY = containerSize.height / imageSize.height;
-    final scale =
-        (scaleX < scaleY ? scaleX : scaleY) * 0.9; // ลดลง 10% เพื่อให้มี margin
+    final scale = (scaleX < scaleY ? scaleX : scaleY) * 0.85; // ลดลง 15% เพื่อให้มี margin
 
-    // คำนวณตำแหน่งกลางภาพ
-    final centerX = imageSize.width / 2;
-    final centerY = imageSize.height / 2;
+    debugPrint('AutoFit scales - X: $scaleX, Y: $scaleY, Final: $scale');
 
-    // สร้าง transformation matrix
+    // คำนวณตำแหน่งที่จะทำให้ภาพอยู่กลาง container
+    final scaledImageWidth = imageSize.width * scale;
+    final scaledImageHeight = imageSize.height * scale;
+    
+    final offsetX = (containerSize.width - scaledImageWidth) / 2;
+    final offsetY = (containerSize.height - scaledImageHeight) / 2;
+
+    // สร้าง transformation matrix แบบใหม่
     final matrix = Matrix4.identity()
-      ..translate(-centerX, -centerY) // ย้ายไปที่จุดกลาง
-      ..scale(scale) // ปรับขนาด
-      ..translate(
-        containerSize.width / 2,
-        containerSize.height / 2,
-      ); // ย้ายกลับมากลาง container
+      ..translate(offsetX, offsetY)
+      ..scale(scale);
+
+    debugPrint('AutoFit - Offset: ($offsetX, $offsetY), Scale: $scale');
 
     _transformationController.value = matrix;
   }
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('=== InteractiveMapImproved build ===');
+    debugPrint('IsImageLoaded: $_isImageLoaded');
+    debugPrint('MapImageSize: $_mapImageSize');
+    debugPrint('MapData in build: ${widget.mapData?.name}');
+    debugPrint('HasImage in build: ${widget.mapData?.hasImage}');
+
     if (!_isImageLoaded) {
+      debugPrint('Showing loading indicator');
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -163,6 +202,9 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     final availableRooms = widget.rooms
         .where((room) => !room.hasPosition)
         .toList();
+
+    debugPrint('Positioned rooms: ${positionedRooms.length}');
+    debugPrint('Available rooms: ${availableRooms.length}');
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -285,7 +327,8 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     return Container(
       width: _mapImageSize?.width ?? 1200,
       height: _mapImageSize?.height ?? 800,
-      child: widget.mapData?.hasImage == true
+      child:
+          widget.mapData?.hasImage == true && widget.mapData?.imagePath != null
           ? Image.file(
               File(widget.mapData!.imagePath!),
               fit: BoxFit.cover, // เปลี่ยนกลับเป็น cover เพื่อคงอัตราส่วน
@@ -609,12 +652,20 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
 
   // Widget สำหรับห้องที่วางตำแหน่งแล้ว
   Widget _buildPositionedRoomWidget(Room room) {
+    debugPrint(
+      'Building positioned room: ${room.name} at (${room.positionX}, ${room.positionY})',
+    );
+
     final (width, height) = room.getSizeForUI();
 
     // คำนวณตำแหน่งจาก percentage เป็น absolute position
     final imageSize = _mapImageSize ?? const Size(1200, 800);
     final absoluteX = (room.positionX! / 100) * imageSize.width;
     final absoluteY = (room.positionY! / 100) * imageSize.height;
+
+    debugPrint(
+      'Room ${room.name}: percentage(${room.positionX}, ${room.positionY}) -> absolute(${absoluteX}, ${absoluteY})',
+    );
 
     return Transform.translate(
       offset: Offset(absoluteX - (width / 2), absoluteY - (height / 2)),
@@ -992,11 +1043,17 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
         children: [
           IconButton(
             onPressed: () {
-              final currentScale = _transformationController.value
-                  .getMaxScaleOnAxis();
-              final newScale = (currentScale * 1.2).clamp(0.1, 5.0);
-              final matrix = Matrix4.identity()..scale(newScale);
-              _transformationController.value = matrix;
+              final currentMatrix = _transformationController.value;
+              final currentScale = currentMatrix.getMaxScaleOnAxis();
+              final newScale = (currentScale * 1.3).clamp(0.1, 5.0);
+              
+              // สร้าง matrix ใหม่โดยรักษาตำแหน่งปัจจุบัน
+              final translation = currentMatrix.getTranslation();
+              final newMatrix = Matrix4.identity()
+                ..translate(translation.x, translation.y)
+                ..scale(newScale);
+              
+              _transformationController.value = newMatrix;
             },
             icon: const Icon(Icons.zoom_in, size: 20),
             tooltip: 'ขยาย',
@@ -1004,20 +1061,33 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
           const Divider(height: 1),
           IconButton(
             onPressed: () {
-              final currentScale = _transformationController.value
-                  .getMaxScaleOnAxis();
-              final newScale = (currentScale / 1.2).clamp(0.1, 5.0);
-              final matrix = Matrix4.identity()..scale(newScale);
-              _transformationController.value = matrix;
+              final currentMatrix = _transformationController.value;
+              final currentScale = currentMatrix.getMaxScaleOnAxis();
+              final newScale = (currentScale / 1.3).clamp(0.1, 5.0);
+              
+              // สร้าง matrix ใหม่โดยรักษาตำแหน่งปัจจุบัน
+              final translation = currentMatrix.getTranslation();
+              final newMatrix = Matrix4.identity()
+                ..translate(translation.x, translation.y)
+                ..scale(newScale);
+              
+              _transformationController.value = newMatrix;
             },
             icon: const Icon(Icons.zoom_out, size: 20),
             tooltip: 'ย่อ',
           ),
           const Divider(height: 1),
           IconButton(
-            onPressed: _autoFitImage,
+            onPressed: () {
+              // บังคับให้ autofit ทำงานแม้จะมีภาพแล้ว
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) {
+                  _autoFitImage();
+                }
+              });
+            },
             icon: const Icon(Icons.fit_screen, size: 20),
-            tooltip: 'ปรับขนาด',
+            tooltip: 'ปรับขนาดพอดีหน้าจอ',
           ),
         ],
       ),

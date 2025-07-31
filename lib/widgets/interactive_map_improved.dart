@@ -162,14 +162,16 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     // คำนวณ scale ที่เหมาะสมเพื่อให้รูปภาพพอดีกับ container
     final scaleX = containerSize.width / imageSize.width;
     final scaleY = containerSize.height / imageSize.height;
-    final scale = (scaleX < scaleY ? scaleX : scaleY) * 0.85; // ลดลง 15% เพื่อให้มี margin
+    final scale =
+        (scaleX < scaleY ? scaleX : scaleY) *
+        0.85; // ลดลง 15% เพื่อให้มี margin
 
     debugPrint('AutoFit scales - X: $scaleX, Y: $scaleY, Final: $scale');
 
     // คำนวณตำแหน่งที่จะทำให้ภาพอยู่กลาง container
     final scaledImageWidth = imageSize.width * scale;
     final scaledImageHeight = imageSize.height * scale;
-    
+
     final offsetX = (containerSize.width - scaledImageWidth) / 2;
     final offsetY = (containerSize.height - scaledImageHeight) / 2;
 
@@ -1070,13 +1072,13 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
               final currentMatrix = _transformationController.value;
               final currentScale = currentMatrix.getMaxScaleOnAxis();
               final newScale = (currentScale * 1.3).clamp(0.1, 5.0);
-              
+
               // สร้าง matrix ใหม่โดยรักษาตำแหน่งปัจจุบัน
               final translation = currentMatrix.getTranslation();
               final newMatrix = Matrix4.identity()
                 ..translate(translation.x, translation.y)
                 ..scale(newScale);
-              
+
               _transformationController.value = newMatrix;
             },
             icon: const Icon(Icons.zoom_in, size: 20),
@@ -1088,13 +1090,13 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
               final currentMatrix = _transformationController.value;
               final currentScale = currentMatrix.getMaxScaleOnAxis();
               final newScale = (currentScale / 1.3).clamp(0.1, 5.0);
-              
+
               // สร้าง matrix ใหม่โดยรักษาตำแหน่งปัจจุบัน
               final translation = currentMatrix.getTranslation();
               final newMatrix = Matrix4.identity()
                 ..translate(translation.x, translation.y)
                 ..scale(newScale);
-              
+
               _transformationController.value = newMatrix;
             },
             icon: const Icon(Icons.zoom_out, size: 20),

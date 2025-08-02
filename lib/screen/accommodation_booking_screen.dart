@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import '../widgets/interactive_map_improved.dart';
 import '../services/map_service.dart';
@@ -114,23 +115,29 @@ class _AccommodationBookingScreenState
 
   Future<void> _onRoomTapped(Room room) async {
     if (room.status != RoomStatus.available) {
-      _showRoomUnavailableDialog(room);
+      await _showRoomManagementDialog(room);
       return;
     }
 
     await _showBookingDialog(room);
   }
 
-  void _showRoomUnavailableDialog(Room room) {
+  Future<void> _showRoomManagementDialog(Room room) async {
+    if (room.status == RoomStatus.occupied) {
+      // ห้องมีผู้เข้าพัก - แสดงตัวเลือกการจัดการ
+      await _showOccupiedRoomDialog(room);
+    } else {
+      // ห้องไม่พร้อมใช้งาน - แสดงข้อความธรรมดา
+      _showSimpleUnavailableDialog(room);
+    }
+  }
+
+  void _showSimpleUnavailableDialog(Room room) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('ห้อง ${room.name}'),
-        content: Text(
-          room.status == RoomStatus.occupied
-              ? 'ห้องนี้มีผู้เข้าพักแล้วในวันที่เลือก'
-              : 'ห้องนี้ไม่พร้อมให้บริการ',
-        ),
+        content: const Text('ห้องนี้ไม่พร้อมให้บริการ'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -141,30 +148,37 @@ class _AccommodationBookingScreenState
     );
   }
 
-  Future<void> _showBookingDialog(Room room) async {
-    final idController = TextEditingController();
+  Future<void> _showOccupiedRoomDialog(Room room) async {
+    // หาข้อมูลผู้เข้าพักในห้องนี้
+    final occupantInfo = await _getRoomOccupantInfo(room.id!, _selectedDate);
 
-    return showDialog(
+    if (occupantInfo == null) {
+      _showSimpleUnavailableDialog(room);
+      return;
+    }
+
+    if (!mounted) return;
+
+    showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('จองห้อง ${room.name}'),
+        title: Text('ห้อง ${room.name}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'วันที่: ${DateFormat('dd/MM/yyyy', 'th').format(_selectedDate)}',
+              'ผู้เข้าพัก: ${occupantInfo['first_name']} ${occupantInfo['last_name']}',
             ),
+            Text('เบอร์โทร: ${occupantInfo['phone']}'),
+            Text(
+              'วันที่เข้าพัก: ${_formatDate(occupantInfo['check_in_date'])}',
+            ),
+            Text('วันที่ออก: ${_formatDate(occupantInfo['check_out_date'])}'),
             const SizedBox(height: 16),
-            TextField(
-              controller: idController,
-              decoration: const InputDecoration(
-                labelText: 'หมายเลขบัตรประชาชน',
-                hintText: 'กรอกหมายเลขบัตรประชาชน 13 หลัก',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-              maxLength: 13,
+            const Text(
+              'คุณต้องการทำอะไร?',
+              style: TextStyle(fontWeight: FontWeight.bold),
             ),
           ],
         ),
@@ -175,31 +189,808 @@ class _AccommodationBookingScreenState
           ),
           ElevatedButton(
             onPressed: () async {
-              final idNumber = idController.text.trim();
-              if (idNumber.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('กรุณากรอกหมายเลขบัตรประชาชน')),
-                );
-                return;
-              }
-
-              if (idNumber.length != 13) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('หมายเลขบัตรประชาชนต้องมี 13 หลัก'),
-                  ),
-                );
-                return;
-              }
-
               Navigator.pop(context);
-              await _processBooking(room, idNumber);
+              await _showExtendStayDialog(occupantInfo);
             },
-            child: const Text('จองห้อง'),
+            child: const Text('ขยายวันพัก'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _showChangeRoomDialog(occupantInfo, room);
+            },
+            child: const Text('เปลี่ยนห้อง'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _showCancelBookingDialog(occupantInfo, room);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('ยกเลิกการจอง'),
           ),
         ],
       ),
     );
+  }
+
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return DateFormat('dd/MM/yyyy', 'th').format(date);
+    } catch (e) {
+      return dateStr;
+    }
+  }
+
+  Future<Map<String, dynamic>?> _getRoomOccupantInfo(
+    int roomId,
+    DateTime date,
+  ) async {
+    try {
+      final db = await _dbHelper.db;
+      final dateStr = DateFormat('yyyy-MM-dd').format(date);
+
+      final result = await db.rawQuery(
+        '''
+        SELECT rb.*, r.first AS first_name, r.last AS last_name, r.phone
+        FROM room_bookings rb
+        INNER JOIN regs r ON rb.visitor_id = r.id
+        WHERE rb.room_id = ? 
+          AND rb.check_in_date <= ? 
+          AND rb.check_out_date >= ?
+          AND rb.status != 'cancelled'
+        LIMIT 1
+      ''',
+        [roomId, dateStr, dateStr],
+      );
+
+      return result.isNotEmpty ? result.first : null;
+    } catch (e) {
+      debugPrint('Error getting room occupant info: $e');
+      return null;
+    }
+  }
+
+  Future<void> _showExtendStayDialog(Map<String, dynamic> occupantInfo) async {
+    final currentCheckOut = DateTime.parse(occupantInfo['check_out_date']);
+    DateTime? newCheckOutDate = currentCheckOut;
+
+    if (!mounted) return;
+
+    final result = await showDialog<DateTime>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(
+            'ขยายวันพักสำหรับ ${occupantInfo['first_name']} ${occupantInfo['last_name']}',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'วันที่ออกปัจจุบัน: ${_formatDate(occupantInfo['check_out_date'])}',
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'เลือกวันที่สิ้นสุดเข้าพักใหม่:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: () {
+                  debugPrint('📅 เปิดปฏิทินเลือกวันที่...');
+
+                  // ใช้ WidgetsBinding เพื่อให้แน่ใจว่า context พร้อมใช้งาน
+                  WidgetsBinding.instance.addPostFrameCallback((_) async {
+                    try {
+                      // คำนวณวันที่เริ่มต้นและวันที่แรกที่เลือกได้
+                      final firstAvailableDate = currentCheckOut.add(
+                        const Duration(days: 1),
+                      );
+
+                      // ตรวจสอบว่า newCheckOutDate ต้องไม่น้อยกว่า firstAvailableDate
+                      DateTime initialDate;
+                      if (newCheckOutDate != null &&
+                          newCheckOutDate!.isAfter(
+                            firstAvailableDate.subtract(
+                              const Duration(days: 1),
+                            ),
+                          )) {
+                        initialDate = newCheckOutDate!;
+                      } else {
+                        initialDate = firstAvailableDate;
+                      }
+
+                      debugPrint('📅 currentCheckOut: $currentCheckOut');
+                      debugPrint('📅 firstAvailableDate: $firstAvailableDate');
+                      debugPrint('📅 initialDate: $initialDate');
+
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: initialDate,
+                        firstDate: firstAvailableDate,
+                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                        locale: const Locale('th'),
+                      );
+                      debugPrint('📅 เลือกวันที่: $picked');
+                      if (picked != null) {
+                        setState(() {
+                          newCheckOutDate = picked;
+                        });
+                      }
+                    } catch (e) {
+                      debugPrint('❌ Error showing date picker: $e');
+                      // แสดงข้อความ error ให้ผู้ใช้ทราบ
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('เกิดข้อผิดพลาดในการเปิดปฏิทิน: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_today),
+                      const SizedBox(width: 8),
+                      Text(
+                        newCheckOutDate == null
+                            ? 'เลือกวันที่'
+                            : _formatDate(newCheckOutDate!.toIso8601String()),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ยกเลิก'),
+            ),
+            ElevatedButton(
+              onPressed: newCheckOutDate == null
+                  ? null
+                  : () => Navigator.pop(context, newCheckOutDate),
+              child: const Text('บันทึก'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      await _updateCheckOutDate(occupantInfo, result);
+    }
+  }
+
+  Future<void> _updateCheckOutDate(
+    Map<String, dynamic> occupantInfo,
+    DateTime newCheckOutDate,
+  ) async {
+    try {
+      final db = await _dbHelper.db;
+      final newCheckOutStr = DateFormat('yyyy-MM-dd').format(newCheckOutDate);
+
+      // อัพเดต room_bookings table
+      await db.update(
+        'room_bookings',
+        {'check_out_date': newCheckOutStr},
+        where: 'id = ?',
+        whereArgs: [occupantInfo['id']],
+      );
+
+      // อัพเดตข้อมูลในตาราง reg_additional_info ด้วย
+      await db.update(
+        'reg_additional_info',
+        {'endDate': newCheckOutStr},
+        where: 'regId = ?',
+        whereArgs: [occupantInfo['visitor_id']],
+      );
+
+      // รีโหลดข้อมูลห้อง
+      await _updateRoomStatusForDate(_selectedDate);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'ขยายวันพักสำเร็จ วันที่ออกใหม่: ${_formatDate(newCheckOutStr)}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error updating check out date: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการขยายวันพัก'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showChangeRoomDialog(
+    Map<String, dynamic> occupantInfo,
+    Room currentRoom,
+  ) async {
+    // หาห้องว่างสำหรับย้าย
+    final availableRooms = await _getAvailableRoomsForTransfer(occupantInfo);
+
+    if (availableRooms.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ไม่มีห้องว่างสำหรับย้าย')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+
+    Room? selectedRoom;
+
+    final result = await showDialog<Room>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(
+            'เปลี่ยนห้องสำหรับ ${occupantInfo['first_name']} ${occupantInfo['last_name']}',
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 300,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('ห้องปัจจุบัน: ${currentRoom.name}'),
+                const SizedBox(height: 16),
+                const Text(
+                  'เลือกห้องใหม่:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: availableRooms.length,
+                    itemBuilder: (context, index) {
+                      final room = availableRooms[index];
+                      final isSelected = selectedRoom?.id == room.id;
+
+                      return ListTile(
+                        title: Text(room.name),
+                        subtitle: Text(
+                          'ขนาด: ${room.size.name}, จุได้: ${room.capacity} คน',
+                        ),
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: isSelected ? Colors.blue : Colors.green,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.hotel, color: Colors.white),
+                        ),
+                        selected: isSelected,
+                        selectedTileColor: Colors.blue.shade50,
+                        onTap: () {
+                          setState(() {
+                            selectedRoom = room;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ยกเลิก'),
+            ),
+            ElevatedButton(
+              onPressed: selectedRoom == null
+                  ? null
+                  : () => Navigator.pop(context, selectedRoom),
+              child: const Text('ย้ายห้อง'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      await _transferToNewRoom(occupantInfo, currentRoom, result);
+    }
+  }
+
+  Future<List<Room>> _getAvailableRoomsForTransfer(
+    Map<String, dynamic> occupantInfo,
+  ) async {
+    try {
+      final checkInDate = occupantInfo['check_in_date'];
+      final checkOutDate = occupantInfo['check_out_date'];
+
+      final availableRooms = <Room>[];
+
+      for (final room in _rooms) {
+        if (room.id == occupantInfo['room_id']) continue; // ข้ามห้องปัจจุบัน
+
+        // ตรวจสอบว่าห้องว่างในช่วงเวลาที่ต้องการย้าย
+        final conflicts = await _getBookingsForRoomAndDateRange(
+          room.id!,
+          checkInDate,
+          checkOutDate,
+        );
+
+        if (conflicts.isEmpty) {
+          availableRooms.add(room);
+        }
+      }
+
+      return availableRooms;
+    } catch (e) {
+      debugPrint('Error getting available rooms for transfer: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _getBookingsForRoomAndDateRange(
+    int roomId,
+    String startDate,
+    String endDate,
+  ) async {
+    final db = await _dbHelper.db;
+
+    return await db.query(
+      'room_bookings',
+      where: '''
+        room_id = ? AND status != 'cancelled' AND (
+          (check_in_date <= ? AND check_out_date >= ?) OR
+          (check_in_date <= ? AND check_out_date >= ?) OR
+          (check_in_date >= ? AND check_out_date <= ?)
+        )
+      ''',
+      whereArgs: [
+        roomId,
+        startDate,
+        startDate,
+        endDate,
+        endDate,
+        startDate,
+        endDate,
+      ],
+    );
+  }
+
+  Future<void> _transferToNewRoom(
+    Map<String, dynamic> occupantInfo,
+    Room oldRoom,
+    Room newRoom,
+  ) async {
+    try {
+      final db = await _dbHelper.db;
+
+      // อัพเดตการจองไปห้องใหม่
+      await db.update(
+        'room_bookings',
+        {'room_id': newRoom.id},
+        where: 'id = ?',
+        whereArgs: [occupantInfo['id']],
+      );
+
+      // รีโหลดข้อมูลห้อง
+      await _updateRoomStatusForDate(_selectedDate);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'ย้ายห้องสำเร็จ จาก ${oldRoom.name} ไป ${newRoom.name}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error transferring to new room: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการย้ายห้อง'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showCancelBookingDialog(
+    Map<String, dynamic> occupantInfo,
+    Room room,
+  ) async {
+    if (!mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('ยืนยันการยกเลิกการจอง'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ผู้เข้าพัก: ${occupantInfo['first_name']} ${occupantInfo['last_name']}',
+            ),
+            Text('ห้อง: ${room.name}'),
+            Text(
+              'วันที่เข้าพัก: ${_formatDate(occupantInfo['check_in_date'])}',
+            ),
+            Text('วันที่ออก: ${_formatDate(occupantInfo['check_out_date'])}'),
+            const SizedBox(height: 16),
+            const Text(
+              'คุณต้องการยกเลิกการจองนี้หรือไม่?',
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'การดำเนินการนี้ไม่สามารถย้อนกลับได้',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('ไม่ยกเลิก'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('ยกเลิกการจอง'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _cancelBooking(occupantInfo);
+    }
+  }
+
+  Future<void> _cancelBooking(Map<String, dynamic> occupantInfo) async {
+    try {
+      final db = await _dbHelper.db;
+
+      // ลบข้อมูลการจองจากตาราง room_bookings
+      await db.delete(
+        'room_bookings',
+        where: 'id = ?',
+        whereArgs: [occupantInfo['id']],
+      );
+
+      // อัพเดตข้อมูลใน reg_additional_info เพื่อลบข้อมูลที่พัก
+      await db.update(
+        'reg_additional_info',
+        {'location': null, 'endDate': null},
+        where: 'regId = ?',
+        whereArgs: [occupantInfo['visitor_id']],
+      );
+
+      // รีโหลดข้อมูลห้อง
+      await _updateRoomStatusForDate(_selectedDate);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'ยกเลิกการจองสำเร็จ สำหรับ ${occupantInfo['first_name']} ${occupantInfo['last_name']}',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error canceling booking: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการยกเลิกการจอง'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showBookingDialog(Room room) async {
+    // โหลดรายชื่อผู้ปฏิบัติธรรมที่สามารถจองได้
+    final availablePractitioners = await _getAvailablePractitioners(
+      _selectedDate,
+    );
+
+    if (availablePractitioners.isEmpty) {
+      _showErrorDialog(
+        'ไม่พบผู้ปฏิบัติธรรมที่สามารถเข้าพักในวันนี้ กรุณาตรวจสอบข้อมูลการลงทะเบียน',
+      );
+      return;
+    }
+
+    RegData? selectedPractitioner;
+
+    if (!mounted) return;
+
+    return showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('จองห้อง ${room.name}'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'วันที่: ${DateFormat('dd/MM/yyyy', 'th').format(_selectedDate)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'เลือกผู้ปฏิบัติธรรม:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 300,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: availablePractitioners.isEmpty
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.people_outline,
+                                size: 64,
+                                color: Colors.grey,
+                              ),
+                              SizedBox(height: 16),
+                              Text(
+                                'ยังไม่มีผู้ปฏิบัติธรรมที่สามารถ\nจองห้องพักในวันนี้',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: availablePractitioners.length,
+                          itemBuilder: (context, index) {
+                            final practitioner = availablePractitioners[index];
+                            final isSelected =
+                                selectedPractitioner?.id == practitioner.id;
+
+                            return ListTile(
+                              title: Text(
+                                '${practitioner.first} ${practitioner.last}',
+                              ),
+                              subtitle: Text(
+                                'เบอร์โทร: ${practitioner.phone}\n'
+                                'เพศ: ${practitioner.gender}',
+                              ),
+                              leading: CircleAvatar(
+                                backgroundColor: isSelected
+                                    ? Colors.blue
+                                    : Colors.grey.shade300,
+                                child: Text(
+                                  practitioner.first.isNotEmpty
+                                      ? practitioner.first[0]
+                                      : '?',
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.black54,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              selected: isSelected,
+                              selectedTileColor: Colors.blue.shade50,
+                              onTap: () {
+                                setState(() {
+                                  selectedPractitioner = practitioner;
+                                });
+                              },
+                            );
+                          },
+                        ),
+                ),
+                if (selectedPractitioner != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      border: Border.all(color: Colors.green.shade200),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, color: Colors.green.shade700),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'เลือก: ${selectedPractitioner!.first} ${selectedPractitioner!.last}',
+                            style: TextStyle(
+                              color: Colors.green.shade700,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ยกเลิก'),
+            ),
+            ElevatedButton(
+              onPressed: selectedPractitioner == null
+                  ? null
+                  : () async {
+                      Navigator.pop(context);
+                      await _processBooking(room, selectedPractitioner!.id);
+                    },
+              child: const Text('จองห้อง'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// โหลดรายชื่อผู้ปฏิบัติธรรมที่สามารถจองห้องได้
+  Future<List<RegData>> _getAvailablePractitioners(
+    DateTime selectedDate,
+  ) async {
+    try {
+      final db = await _dbHelper.db;
+      final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
+
+      // ค้นหาผู้ปฏิบัติธรรมที่:
+      // 1. กำลังเข้าพักในวันที่เลือก (startDate <= selectedDate <= endDate)
+      // 2. ยังไม่ได้จองห้องพัก หรือห้องเป็น "ศาลาใหญ่"
+      final result = await db.rawQuery(
+        '''
+        SELECT DISTINCT r.*
+        FROM regs r
+        INNER JOIN reg_additional_info ai ON r.id = ai.regId
+        WHERE r.status = 'A'
+          AND (
+            (ai.startDate IS NOT NULL AND ai.endDate IS NOT NULL AND ai.startDate <= ? AND ai.endDate >= ?) OR
+            (ai.startDate IS NULL OR ai.endDate IS NULL)
+          )
+          AND r.id NOT IN (
+            SELECT DISTINCT rb.visitor_id
+            FROM room_bookings rb
+            INNER JOIN rooms room ON rb.room_id = room.id
+            WHERE rb.check_in_date <= ? 
+              AND rb.check_out_date >= ?
+              AND rb.status != 'cancelled'
+              AND room.name != 'ศาลาใหญ่'
+          )
+        ORDER BY r.first, r.last
+      ''',
+        [dateStr, dateStr, dateStr, dateStr],
+      );
+
+      debugPrint('📊 Query for available practitioners on $dateStr:');
+      debugPrint('   Found ${result.length} practitioners');
+
+      if (result.isEmpty) {
+        // ตรวจสอบว่ามีคนลงทะเบียนหรือไม่
+        final allRegs = await db.query(
+          'regs',
+          where: 'status = ?',
+          whereArgs: ['A'],
+        );
+        debugPrint('   Total active registrations: ${allRegs.length}');
+
+        // ตรวจสอบว่ามีข้อมูลการเข้าพักหรือไม่
+        final allStays = await db.rawQuery(
+          '''
+          SELECT ai.*, r.first, r.last
+          FROM reg_additional_info ai
+          INNER JOIN regs r ON ai.regId = r.id
+          WHERE r.status = 'A' AND ai.startDate <= ? AND ai.endDate >= ?
+        ''',
+          [dateStr, dateStr],
+        );
+        debugPrint('   People staying on $dateStr: ${allStays.length}');
+
+        // ตรวจสอบข้อมูลทั้งหมดใน reg_additional_info
+        final allAdditionalInfo = await db.rawQuery('''
+          SELECT ai.*, r.first, r.last
+          FROM reg_additional_info ai
+          INNER JOIN regs r ON ai.regId = r.id
+          WHERE r.status = 'A'
+        ''');
+        debugPrint(
+          '   All additional info records: ${allAdditionalInfo.length}',
+        );
+
+        for (var info in allAdditionalInfo) {
+          debugPrint(
+            '     - ${info['first']} ${info['last']}: ${info['startDate']} - ${info['endDate']} (regId: ${info['regId']})',
+          );
+        }
+
+        for (var stay in allStays) {
+          debugPrint(
+            '     - ${stay['first']} ${stay['last']}: ${stay['startDate']} - ${stay['endDate']}',
+          );
+        }
+
+        // ตรวจสอบการจองห้อง
+        final bookings = await db.rawQuery(
+          '''
+          SELECT rb.*, r.first, r.last, room.name as room_name
+          FROM room_bookings rb
+          INNER JOIN regs r ON rb.visitor_id = r.id
+          INNER JOIN rooms room ON rb.room_id = room.id
+          WHERE rb.check_in_date <= ? AND rb.check_out_date >= ? AND rb.status != 'cancelled'
+        ''',
+          [dateStr, dateStr],
+        );
+        debugPrint('   Existing bookings on $dateStr: ${bookings.length}');
+
+        for (var booking in bookings) {
+          debugPrint(
+            '     - ${booking['first']} ${booking['last']} in ${booking['room_name']}',
+          );
+        }
+      }
+
+      return result.map((map) => RegData.fromMap(map)).toList();
+    } catch (e) {
+      debugPrint('Error getting available practitioners: $e');
+      return [];
+    }
   }
 
   Future<void> _processBooking(Room room, String idNumber) async {
@@ -230,7 +1021,7 @@ class _AccommodationBookingScreenState
       );
       if (existingBooking != null) {
         _showErrorDialog(
-          'ผู้ปฏิบัติธรรมมีการจองห้องอื่นในวันนี้แล้ว\nห้อง: ${existingBooking['room_name']}',
+          'ผู้ปฏิบัติธรรมรายนี้ได้จองห้องพักไว้แล้ว หากต้องการเปลี่ยนห้อง กรุณายกเลิกการจองเดิมก่อน\n\nห้องที่จองไว้: ${existingBooking['room_name']}',
         );
         return;
       }
@@ -264,11 +1055,25 @@ class _AccommodationBookingScreenState
     final dateStr = DateFormat('yyyy-MM-dd').format(checkDate);
 
     // ตรวจสอบจาก reg_additional_info ว่ามีช่วงเวลาที่ครอบคลุมวันที่ตรวจสอบหรือไม่
+    // รองรับกรณีที่ startDate หรือ endDate เป็น null (ถือว่าสามารถจองได้)
     final result = await db.query(
       'reg_additional_info',
-      where: 'regId = ? AND startDate <= ? AND endDate >= ?',
+      where: '''regId = ? AND (
+        (startDate IS NOT NULL AND endDate IS NOT NULL AND startDate <= ? AND endDate >= ?) OR
+        (startDate IS NULL OR endDate IS NULL)
+      )''',
       whereArgs: [idNumber, dateStr, dateStr],
     );
+
+    debugPrint(
+      '🔍 Checking stay status for $idNumber on $dateStr: ${result.isNotEmpty ? "ALLOWED" : "NOT ALLOWED"}',
+    );
+    if (result.isNotEmpty) {
+      final record = result.first;
+      debugPrint(
+        '   - startDate: ${record['startDate']}, endDate: ${record['endDate']}',
+      );
+    }
 
     return result.isNotEmpty;
   }
@@ -513,15 +1318,6 @@ class _AccommodationBookingScreenState
                 Expanded(
                   child: Column(
                     children: [
-                      // Debug info (เฉพาะ debug mode)
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        color: Colors.yellow[100],
-                        child: Text(
-                          'Debug: แผนที่="${_selectedMap?.name}", รูปภาพ=${_selectedMap?.hasImage}, ห้อง=${_rooms.length}ห้อง',
-                          style: const TextStyle(fontSize: 10),
-                        ),
-                      ),
                       // แผนที่จริง
                       Expanded(
                         child: MapViewer(

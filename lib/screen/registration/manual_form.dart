@@ -1031,6 +1031,56 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
     return null;
   }
 
+  // ตรวจสอบว่าผู้ปฏิบัติธรรมมีการจองห้องหรือไม่
+  Future<bool> _hasRoomBooking(String regId) async {
+    try {
+      final db = await DbHelper().db;
+      
+      final result = await db.query(
+        'room_bookings',
+        where: 'visitor_id = ? AND status != ?',
+        whereArgs: [regId, 'cancelled'],
+        limit: 1,
+      );
+
+      return result.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking room booking: $e');
+      return false;
+    }
+  }
+
+  // ตรวจสอบ validation เพิ่มเติมสำหรับการจองห้อง
+  Future<String?> _validateDatesWithRoomBooking() async {
+    // เรียก validation พื้นฐานก่อน
+    final basicValidation = _validateDates();
+    if (basicValidation != null) {
+      return basicValidation;
+    }
+
+    // ตรวจสอบเฉพาะกรณีที่กำลังแก้ไขข้อมูลที่มีอยู่
+    if (!widget.canCreateNew && widget.regId.isNotEmpty) {
+      final hasBooking = await _hasRoomBooking(widget.regId);
+      
+      if (hasBooking) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final startDateOnly = DateTime(
+          startDate!.year,
+          startDate!.month,
+          startDate!.day,
+        );
+
+        // ห้ามแก้ไขวันที่เริ่มต้นให้ย้อนหลังจากวันปัจจุบัน
+        if (startDateOnly.isBefore(today)) {
+          return 'ไม่สามารถแก้ไขวันที่เริ่มต้นย้อนหลังได้ เนื่องจากมีการจองห้องพักแล้ว';
+        }
+      }
+    }
+
+    return null;
+  }
+
   // บันทึกข้อมูล
   Future<void> _saveStayData() async {
     debugPrint('🔄 เริ่มบันทึกข้อมูลการเข้าพัก...');
@@ -1040,10 +1090,10 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
     debugPrint('🆕 canCreateNew: ${widget.canCreateNew}');
     debugPrint('📝 latestStay: ${widget.latestStay?.id}');
 
-    final dateValidation = _validateDates();
+    final dateValidation = await _validateDatesWithRoomBooking();
     if (dateValidation != null) {
       debugPrint('❌ Validation failed: $dateValidation');
-      if (context.mounted) {
+      if (mounted) {
         await showDialog(
           context: context,
           barrierDismissible: false,

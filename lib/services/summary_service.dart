@@ -7,37 +7,47 @@ class SummaryService {
   Future<DailySummary> getDailySummary({DateTime? date}) async {
     final targetDate = date ?? DateTime.now();
     final dateStr = _formatDate(targetDate);
-    
+
     final db = await _dbHelper.db;
-    
-    // ผู้เข้าพักทั้งหมดวันนี้ (active stays)
-    final activeStaysResult = await db.rawQuery('''
+
+    // ผู้เข้าพักทั้งหมดวันนี้ (active stays) - ใช้ stays table
+    final activeStaysResult = await db.rawQuery(
+      '''
       SELECT r.gender, COUNT(*) as count
       FROM regs r
-      INNER JOIN reg_additional_info ai ON r.id = ai.regId
-      WHERE ai.startDate <= ? AND ai.endDate >= ?
+      INNER JOIN stays s ON r.id = s.visitor_id
+      WHERE s.start_date <= ? AND s.end_date >= ? AND s.status = 'active'
       GROUP BY r.gender
-    ''', [dateStr, dateStr]);
+    ''',
+      [dateStr, dateStr],
+    );
 
     // ผู้ลงทะเบียนใหม่วันนี้
-    final newRegistrationsResult = await db.rawQuery('''
+    final newRegistrationsResult = await db.rawQuery(
+      '''
       SELECT r.gender, COUNT(*) as count
       FROM regs r
       WHERE DATE(r.createdAt) = DATE(?)
       GROUP BY r.gender
-    ''', [targetDate.toIso8601String()]);
+    ''',
+      [targetDate.toIso8601String()],
+    );
 
     // ผู้เช็คเอาท์วันนี้
-    final checkoutsResult = await db.rawQuery('''
+    final checkoutsResult = await db.rawQuery(
+      '''
       SELECT r.gender, COUNT(*) as count
       FROM regs r
-      INNER JOIN reg_additional_info ai ON r.id = ai.regId
-      WHERE ai.endDate = ?
+      INNER JOIN stays s ON r.id = s.visitor_id
+      WHERE s.end_date = ? AND s.status = 'active'
       GROUP BY r.gender
-    ''', [dateStr]);
+    ''',
+      [dateStr],
+    );
 
-    // สรุปอุปกรณ์ที่แจกจ่าย (รายวัน)
-    final equipmentResult = await db.rawQuery('''
+    // สรุปอุปกรณ์ที่แจกจ่าย (รายวัน) - ดึงจากผู้ที่ลงทะเบียนในวันนั้น
+    final equipmentResult = await db.rawQuery(
+      '''
       SELECT 
         SUM(ai.shirtCount) as totalShirts,
         SUM(ai.pantsCount) as totalPants,
@@ -45,17 +55,24 @@ class SummaryService {
         SUM(ai.pillowCount) as totalPillows,
         SUM(ai.blanketCount) as totalBlankets
       FROM reg_additional_info ai
-      WHERE ai.startDate <= ? AND ai.endDate >= ?
-    ''', [dateStr, dateStr]);
+      INNER JOIN regs r ON ai.regId = r.id
+      WHERE DATE(r.createdAt) = DATE(?)
+    ''',
+      [targetDate.toIso8601String()],
+    );
 
-    // ผู้ที่มากับเด็ก
-    final childrenResult = await db.rawQuery('''
+    // ผู้ที่มากับเด็ก - ดึงจากผู้ที่ลงทะเบียนในวันนั้น
+    final childrenResult = await db.rawQuery(
+      '''
       SELECT 
         COUNT(*) as familiesWithChildren,
         SUM(ai.childrenCount) as totalChildren
       FROM reg_additional_info ai
-      WHERE ai.withChildren = 1 AND ai.startDate <= ? AND ai.endDate >= ?
-    ''', [dateStr, dateStr]);
+      INNER JOIN regs r ON ai.regId = r.id
+      WHERE ai.withChildren = 1 AND DATE(r.createdAt) = DATE(?)
+    ''',
+      [targetDate.toIso8601String()],
+    );
 
     return DailySummary(
       date: targetDate,
@@ -76,55 +93,71 @@ class SummaryService {
     final startDateStr = _formatDate(startDate);
     final endDateStr = _formatDate(endDate);
 
-    // จำนวนผู้เข้าพักในช่วงเวลา แยกตามเพศ
-    final staysByGenderResult = await db.rawQuery('''
+    // จำนวนผู้เข้าพักในช่วงเวลา แยกตามเพศ - ใช้ stays table
+    final staysByGenderResult = await db.rawQuery(
+      '''
       SELECT r.gender, COUNT(DISTINCT r.id) as count
       FROM regs r
-      INNER JOIN reg_additional_info ai ON r.id = ai.regId
-      WHERE ai.startDate <= ? AND ai.endDate >= ?
+      INNER JOIN stays s ON r.id = s.visitor_id
+      WHERE s.start_date <= ? AND s.end_date >= ? AND s.status = 'active'
       GROUP BY r.gender
-    ''', [endDateStr, startDateStr]);
+    ''',
+      [endDateStr, startDateStr],
+    );
 
     // ผู้ลงทะเบียนใหม่ในช่วงเวลา แยกตามเพศ
-    final newRegsByGenderResult = await db.rawQuery('''
+    final newRegsByGenderResult = await db.rawQuery(
+      '''
       SELECT r.gender, COUNT(*) as count
       FROM regs r
       WHERE DATE(r.createdAt) >= DATE(?) AND DATE(r.createdAt) <= DATE(?)
       GROUP BY r.gender
-    ''', [startDate.toIso8601String(), endDate.toIso8601String()]);
+    ''',
+      [startDate.toIso8601String(), endDate.toIso8601String()],
+    );
 
-    // จำนวนผู้เข้าพักในช่วงเวลา (รวม)
-    final totalStaysResult = await db.rawQuery('''
+    // จำนวนผู้เข้าพักในช่วงเวลา (รวม) - ใช้ stays table
+    final totalStaysResult = await db.rawQuery(
+      '''
       SELECT COUNT(DISTINCT r.id) as totalStays
       FROM regs r
-      INNER JOIN reg_additional_info ai ON r.id = ai.regId
-      WHERE ai.startDate <= ? AND ai.endDate >= ?
-    ''', [endDateStr, startDateStr]);
+      INNER JOIN stays s ON r.id = s.visitor_id
+      WHERE s.start_date <= ? AND s.end_date >= ? AND s.status = 'active'
+    ''',
+      [endDateStr, startDateStr],
+    );
 
-    // ระยะเวลาเข้าพักเฉลี่ย
-    final avgStayResult = await db.rawQuery('''
+    // ระยะเวลาเข้าพักเฉลี่ย - ใช้ stays table
+    final avgStayResult = await db.rawQuery(
+      '''
       SELECT AVG(
-        JULIANDAY(ai.endDate) - JULIANDAY(ai.startDate) + 1
+        JULIANDAY(s.end_date) - JULIANDAY(s.start_date) + 1
       ) as avgStayDuration
-      FROM reg_additional_info ai
-      WHERE ai.startDate >= ? AND ai.startDate <= ?
-    ''', [startDateStr, endDateStr]);
+      FROM stays s
+      WHERE s.start_date >= ? AND s.start_date <= ? AND s.status = 'active'
+    ''',
+      [startDateStr, endDateStr],
+    );
 
-    // ผู้เข้าพักระยะยาว
-    final longStaysResult = await db.rawQuery('''
+    // ผู้เข้าพักระยะยาว - ใช้ stays table
+    final longStaysResult = await db.rawQuery(
+      '''
       SELECT 
         COUNT(CASE WHEN duration > 7 THEN 1 END) as moreThan7Days,
         COUNT(CASE WHEN duration > 14 THEN 1 END) as moreThan14Days,
         COUNT(CASE WHEN duration > 30 THEN 1 END) as moreThan30Days
       FROM (
-        SELECT (JULIANDAY(ai.endDate) - JULIANDAY(ai.startDate) + 1) as duration
-        FROM reg_additional_info ai
-        WHERE ai.startDate >= ? AND ai.startDate <= ?
+        SELECT (JULIANDAY(s.end_date) - JULIANDAY(s.start_date) + 1) as duration
+        FROM stays s
+        WHERE s.start_date >= ? AND s.start_date <= ? AND s.status = 'active'
       )
-    ''', [startDateStr, endDateStr]);
+    ''',
+      [startDateStr, endDateStr],
+    );
 
-    // สรุปอุปกรณ์ที่แจกจ่ายในช่วงเวลา
-    final periodEquipmentResult = await db.rawQuery('''
+    // สรุปอุปกรณ์ที่แจกจ่ายในช่วงเวลา - ดึงจากผู้ที่ลงทะเบียนในช่วงเวลานั้น
+    final periodEquipmentResult = await db.rawQuery(
+      '''
       SELECT 
         SUM(ai.shirtCount) as totalShirts,
         SUM(ai.pantsCount) as totalPants,
@@ -132,33 +165,42 @@ class SummaryService {
         SUM(ai.pillowCount) as totalPillows,
         SUM(ai.blanketCount) as totalBlankets
       FROM reg_additional_info ai
-      WHERE ai.startDate >= ? AND ai.startDate <= ?
-    ''', [startDateStr, endDateStr]);
+      INNER JOIN regs r ON ai.regId = r.id
+      WHERE DATE(r.createdAt) >= DATE(?) AND DATE(r.createdAt) <= DATE(?)
+    ''',
+      [startDate.toIso8601String(), endDate.toIso8601String()],
+    );
 
-    // การกระจายตัวตามจังหวัด (top 10)
-    final provinceResult = await db.rawQuery('''
+    // การกระจายตัวตามจังหวัด (top 10) - ใช้ stays table
+    final provinceResult = await db.rawQuery(
+      '''
       SELECT 
         SUBSTR(r.addr, 1, INSTR(r.addr, ',') - 1) as province,
         COUNT(*) as count
       FROM regs r
-      INNER JOIN reg_additional_info ai ON r.id = ai.regId
-      WHERE ai.startDate >= ? AND ai.startDate <= ?
+      INNER JOIN stays s ON r.id = s.visitor_id
+      WHERE s.start_date >= ? AND s.start_date <= ? AND s.status = 'active'
         AND r.addr LIKE '%,%'
       GROUP BY province
       ORDER BY count DESC
       LIMIT 10
-    ''', [startDateStr, endDateStr]);
+    ''',
+      [startDateStr, endDateStr],
+    );
 
-    // แนวโน้มรายวัน
-    final dailyTrendResult = await db.rawQuery('''
+    // แนวโน้มรายวัน - ใช้ stays table
+    final dailyTrendResult = await db.rawQuery(
+      '''
       SELECT 
-        ai.startDate as date,
+        s.start_date as date,
         COUNT(*) as checkins
-      FROM reg_additional_info ai
-      WHERE ai.startDate >= ? AND ai.startDate <= ?
-      GROUP BY ai.startDate
-      ORDER BY ai.startDate
-    ''', [startDateStr, endDateStr]);
+      FROM stays s
+      WHERE s.start_date >= ? AND s.start_date <= ? AND s.status = 'active'
+      GROUP BY s.start_date
+      ORDER BY s.start_date
+    ''',
+      [startDateStr, endDateStr],
+    );
 
     return PeriodSummary(
       startDate: startDate,
@@ -166,7 +208,8 @@ class SummaryService {
       totalStays: totalStaysResult.first['totalStays'] as int? ?? 0,
       staysByGender: _parseGenderCounts(staysByGenderResult),
       newRegistrationsByGender: _parseGenderCounts(newRegsByGenderResult),
-      averageStayDuration: avgStayResult.first['avgStayDuration'] as double? ?? 0.0,
+      averageStayDuration:
+          avgStayResult.first['avgStayDuration'] as double? ?? 0.0,
       longStaysSummary: _parseLongStays(longStaysResult),
       equipmentSummary: _parseEquipmentSummary(periodEquipmentResult),
       topProvinces: _parseProvinces(provinceResult),
@@ -183,29 +226,34 @@ class SummaryService {
     final startDateStr = _formatDate(startDate);
     final endDateStr = _formatDate(endDate);
 
-    final result = await db.rawQuery('''
+    final result = await db.rawQuery(
+      '''
       SELECT 
         COUNT(DISTINCT r.id) as totalVisitors,
         COUNT(DISTINCT CASE WHEN visit_count > 1 THEN r.id END) as repeatVisitors
       FROM regs r
       INNER JOIN (
         SELECT 
-          regId,
+          visitor_id as regId,
           COUNT(*) as visit_count
-        FROM reg_additional_info
-        WHERE startDate >= ? AND startDate <= ?
-        GROUP BY regId
+        FROM stays
+        WHERE start_date >= ? AND start_date <= ? AND status = 'active'
+        GROUP BY visitor_id
       ) vc ON r.id = vc.regId
-    ''', [startDateStr, endDateStr]);
+    ''',
+      [startDateStr, endDateStr],
+    );
 
     final data = result.first;
     final totalVisitors = data['totalVisitors'] as int? ?? 0;
     final repeatVisitors = data['repeatVisitors'] as int? ?? 0;
-    
+
     return RepeatVisitorStats(
       totalVisitors: totalVisitors,
       repeatVisitors: repeatVisitors,
-      repeatRate: totalVisitors > 0 ? (repeatVisitors / totalVisitors) * 100 : 0.0,
+      repeatRate: totalVisitors > 0
+          ? (repeatVisitors / totalVisitors) * 100
+          : 0.0,
     );
   }
 
@@ -268,7 +316,11 @@ class SummaryService {
 
   LongStaysSummary _parseLongStays(List<Map<String, Object?>> results) {
     if (results.isEmpty) {
-      return LongStaysSummary(moreThan7Days: 0, moreThan14Days: 0, moreThan30Days: 0);
+      return LongStaysSummary(
+        moreThan7Days: 0,
+        moreThan14Days: 0,
+        moreThan30Days: 0,
+      );
     }
 
     final data = results.first;
@@ -280,17 +332,27 @@ class SummaryService {
   }
 
   List<ProvinceCount> _parseProvinces(List<Map<String, Object?>> results) {
-    return results.map((row) => ProvinceCount(
-      province: row['province'] as String? ?? 'ไม่ระบุ',
-      count: row['count'] as int? ?? 0,
-    )).toList();
+    return results
+        .map(
+          (row) => ProvinceCount(
+            province: row['province'] as String? ?? 'ไม่ระบุ',
+            count: row['count'] as int? ?? 0,
+          ),
+        )
+        .toList();
   }
 
   List<DailyTrendPoint> _parseDailyTrend(List<Map<String, Object?>> results) {
-    return results.map((row) => DailyTrendPoint(
-      date: DateTime.tryParse(row['date'] as String? ?? '') ?? DateTime.now(),
-      checkins: row['checkins'] as int? ?? 0,
-    )).toList();
+    return results
+        .map(
+          (row) => DailyTrendPoint(
+            date:
+                DateTime.tryParse(row['date'] as String? ?? '') ??
+                DateTime.now(),
+            checkins: row['checkins'] as int? ?? 0,
+          ),
+        )
+        .toList();
   }
 }
 
@@ -312,9 +374,12 @@ class DailySummary {
     required this.childrenInfo,
   });
 
-  int get totalActiveStays => activeStaysByGender.values.fold(0, (sum, count) => sum + count);
-  int get totalNewRegistrations => newRegistrationsByGender.values.fold(0, (sum, count) => sum + count);
-  int get totalCheckouts => checkoutsByGender.values.fold(0, (sum, count) => sum + count);
+  int get totalActiveStays =>
+      activeStaysByGender.values.fold(0, (sum, count) => sum + count);
+  int get totalNewRegistrations =>
+      newRegistrationsByGender.values.fold(0, (sum, count) => sum + count);
+  int get totalCheckouts =>
+      checkoutsByGender.values.fold(0, (sum, count) => sum + count);
 }
 
 class PeriodSummary {
@@ -343,8 +408,10 @@ class PeriodSummary {
   });
 
   // Helper methods สำหรับจำนวนรวม
-  int get totalStaysByGender => staysByGender.values.fold(0, (sum, count) => sum + count);
-  int get totalNewRegistrations => newRegistrationsByGender.values.fold(0, (sum, count) => sum + count);
+  int get totalStaysByGender =>
+      staysByGender.values.fold(0, (sum, count) => sum + count);
+  int get totalNewRegistrations =>
+      newRegistrationsByGender.values.fold(0, (sum, count) => sum + count);
 }
 
 class EquipmentSummary {
@@ -389,20 +456,14 @@ class ProvinceCount {
   final String province;
   final int count;
 
-  ProvinceCount({
-    required this.province,
-    required this.count,
-  });
+  ProvinceCount({required this.province, required this.count});
 }
 
 class DailyTrendPoint {
   final DateTime date;
   final int checkins;
 
-  DailyTrendPoint({
-    required this.date,
-    required this.checkins,
-  });
+  DailyTrendPoint({required this.date, required this.checkins});
 }
 
 class RepeatVisitorStats {

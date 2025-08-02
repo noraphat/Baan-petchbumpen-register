@@ -48,6 +48,10 @@ class _ManualFormState extends State<ManualForm> {
   bool _isIdValid = true;
   Timer? _validationTimer;
 
+  // ข้อมูลชั่วคราวสำหรับการลงทะเบียนใหม่
+  RegAdditionalInfo? _tempAdditionalInfo;
+  bool _hasCompletedStayDialog = false;
+
   @override
   void initState() {
     super.initState();
@@ -170,9 +174,14 @@ class _ManualFormState extends State<ManualForm> {
 
     final old = await DbHelper().fetchById(q);
     if (old == null) {
+      debugPrint(
+        '❌ ไม่พบข้อมูลผู้ลงทะเบียน: $q - แสดงฟอร์มสำหรับลงทะเบียนใหม่',
+      );
       setState(() {
         _found = false;
         _loaded = true;
+        _hasCompletedStayDialog = false; // รีเซ็ตสถานะ
+        _tempAdditionalInfo = null; // รีเซ็ตข้อมูลชั่วคราว
         firstCtrl.clear();
         lastCtrl.clear();
         dobCtrl.clear();
@@ -186,6 +195,9 @@ class _ManualFormState extends State<ManualForm> {
         FocusScope.of(context).requestFocus(_firstFocus);
       }
     } else {
+      debugPrint('✅ พบข้อมูลผู้ลงทะเบียน: ${old.first} ${old.last}');
+
+      // เติมข้อมูลพื้นฐานในฟอร์ม
       setState(() {
         _found = true;
         _loaded = true;
@@ -261,7 +273,9 @@ class _ManualFormState extends State<ManualForm> {
 
         _gender = old.gender;
       });
-      await _showAdditionalInfoDialog(old.id);
+
+      // ตรวจสอบข้อมูลการเข้าพักที่มีอยู่
+      await _checkAndShowStayDialog(old.id);
     }
   }
 
@@ -349,12 +363,14 @@ class _ManualFormState extends State<ManualForm> {
               enabled: !_found,
               mandatory: true,
               focus: _firstFocus,
+              onChanged: (value) => setState(() {}),
             ),
             _buildField(
               label: 'นามสกุล',
               controller: lastCtrl,
               enabled: !_found,
               mandatory: true,
+              onChanged: (value) => setState(() {}),
             ),
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
@@ -402,7 +418,7 @@ class _ManualFormState extends State<ManualForm> {
               keyboard: TextInputType.number,
               validator: PhoneValidator.validatePhone,
               inputFormatters: PhoneValidator.getPhoneInputFormatters(),
-              onChanged: null,
+              onChanged: (value) => setState(() {}),
             ),
             DropdownButtonFormField<int>(
               value: _selProvId,
@@ -466,6 +482,7 @@ class _ManualFormState extends State<ManualForm> {
               controller: addrCtrl,
               lines: 2,
               enabled: !_found,
+              onChanged: (value) => setState(() {}),
             ),
             const SizedBox(height: 12),
             Padding(
@@ -490,11 +507,11 @@ class _ManualFormState extends State<ManualForm> {
                 label: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
                   child: Text(
-                    _found ? 'ลงทะเบียน' : 'ดำเนินการต่อ',
-                    key: ValueKey<bool>(_found),
+                    _getButtonText(),
+                    key: ValueKey<String>(_getButtonText()),
                   ),
                 ),
-                onPressed: _onSave,
+                onPressed: _canProceed() ? _onSave : null,
               ),
             ),
           ],
@@ -525,14 +542,237 @@ class _ManualFormState extends State<ManualForm> {
         keyboardType: keyboard,
         inputFormatters: inputFormatters,
         decoration: InputDecoration(labelText: label),
-        validator: validator ?? (mandatory && !enabled
-            ? null
-            : (mandatory
-                  ? (v) => (v == null || v.isEmpty) ? 'ระบุ $label' : null
-                  : null)),
+        validator:
+            validator ??
+            (mandatory && !enabled
+                ? null
+                : (mandatory
+                      ? (v) => (v == null || v.isEmpty) ? 'ระบุ $label' : null
+                      : null)),
         onChanged: onChanged,
       ),
     );
+  }
+
+  // ฟังก์ชันสำหรับกำหนดข้อความปุ่ม
+  String _getButtonText() {
+    if (_found) {
+      return 'ลงทะเบียน';
+    } else if (_hasCompletedStayDialog) {
+      return 'ลงทะเบียน';
+    } else {
+      return 'ดำเนินการต่อ';
+    }
+  }
+
+  bool _canProceed() {
+    if (_found) {
+      return true; // ผู้ลงทะเบียนที่มีอยู่แล้ว
+    } else {
+      // ผู้ลงทะเบียนใหม่ ต้องกรอกข้อมูลครบและโหลดข้อมูลเสร็จแล้ว
+      return _loaded && _isFormValid();
+    }
+  }
+
+  // ตรวจสอบความถูกต้องของฟอร์มสำหรับผู้ลงทะเบียนใหม่
+  bool _isFormValid() {
+    // ตรวจสอบว่ากรอกข้อมูลครบทุกฟิลด์ที่จำเป็น
+    final hasName = firstCtrl.text.trim().isNotEmpty;
+    final hasLastName = lastCtrl.text.trim().isNotEmpty;
+    final hasDob = dobCtrl.text.trim().isNotEmpty && _selectedDob != null;
+    final hasAddress =
+        _selProvId != null && _selDistId != null && _selSubId != null;
+
+    // ตรวจสอบความถูกต้องของหมายเลขบัตรประชาชน
+    final isValidId = _validateThaiNationalId(searchCtrl.text.trim());
+
+    return hasName && hasLastName && hasDob && hasAddress && isValidId;
+  }
+
+  // ตรวจสอบข้อมูลการเข้าพักและแสดง Dialog
+  Future<void> _checkAndShowStayDialog(String regId) async {
+    try {
+      debugPrint('🔍 ตรวจสอบข้อมูลการเข้าพักสำหรับ: $regId');
+
+      // ตรวจสอบในฐานข้อมูลว่า มี Record ที่ endDate มากกว่าวันปัจจุบันหรือไม่
+      final db = await DbHelper().db;
+      final currentDate = DateTime.now();
+      final currentDateStr = DateFormat('yyyy-MM-dd').format(currentDate);
+
+      debugPrint('📅 วันที่ปัจจุบัน: $currentDateStr');
+
+      // ค้นหา Stay record ที่ยังไม่หมดอายุ (endDate >= วันปัจจุบัน)
+      final activeStaysResult = await db.rawQuery(
+        '''
+        SELECT s.*
+        FROM stays s
+        WHERE s.visitor_id = ? 
+        AND s.end_date >= ? 
+        AND s.status = 'active'
+        ORDER BY s.end_date DESC
+        LIMIT 1
+      ''',
+        [regId, currentDateStr],
+      );
+
+      if (activeStaysResult.isNotEmpty) {
+        debugPrint('✅ พบข้อมูลการเข้าพักที่ยังไม่หมดอายุ');
+        final stayData = activeStaysResult.first;
+
+        // แสดง Dialog พร้อมข้อมูลที่มีอยู่
+        await _showStayDialogWithExistingData(regId, stayData);
+      } else {
+        debugPrint('ℹ️ ไม่พบข้อมูลการเข้าพักที่ยังไม่หมดอายุ แสดงฟอร์มเปล่า');
+        // แสดง Dialog แบบค่าเริ่มต้น
+        await _showAdditionalInfoDialog(regId);
+      }
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการตรวจสอบข้อมูลการเข้าพัก: $e');
+      // ในกรณีมีปัญหา ให้แสดง Dialog แบบค่าเริ่มต้น
+      await _showAdditionalInfoDialog(regId);
+    }
+  }
+
+  // แสดง Dialog สำหรับกรอกข้อมูลการเข้าพักใหม่
+  Future<void> _showStayDialogForNewRegistration() async {
+    debugPrint('📋 เปิด Dialog สำหรับกรอกข้อมูลการเข้าพักใหม่');
+
+    if (!mounted) return;
+
+    try {
+      // บันทึกข้อมูลผู้ลงทะเบียนก่อน
+      debugPrint('💾 บันทึกข้อมูลผู้ลงทะเบียน');
+      await _saveCompleteRegistration();
+
+      // เปิด Dialog สำหรับกรอกข้อมูลการเข้าพัก
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => _AdditionalInfoDialog(
+          regId: searchCtrl.text.trim(), // ใช้หมายเลขบัตรประชาชนเป็น regId
+          existingInfo: null, // ไม่มีข้อมูลเดิม
+          latestStay: null, // ไม่มี stay record
+          canCreateNew: true, // สร้างใหม่
+        ),
+      );
+
+      debugPrint('✅ Dialog การเข้าพักถูกปิดแล้ว');
+
+      // กลับไปยังหน้าเมนูลงทะเบียน
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการแสดง Dialog: $e');
+      // แสดงข้อความแจ้งเตือน
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการแสดงฟอร์ม: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // บันทึกข้อมูลการลงทะเบียนใหม่ทั้งหมด
+  Future<void> _saveCompleteRegistration() async {
+    try {
+      debugPrint('💾 เริ่มบันทึกข้อมูลการลงทะเบียนใหม่ทั้งหมด');
+
+      // สร้างข้อมูลผู้ลงทะเบียน
+      final regData = RegData.manual(
+        id: searchCtrl.text.trim(),
+        first: firstCtrl.text.trim(),
+        last: lastCtrl.text.trim(),
+        dob: dobCtrl.text,
+        phone: phoneCtrl.text.trim(),
+        addr:
+            '${AddressService().provinces.firstWhere((p) => p.id == _selProvId!).nameTh}, '
+            '${AddressService().districtsOf(_selProvId!).firstWhere((d) => d.id == _selDistId!).nameTh}, '
+            '${AddressService().subsOf(_selDistId!).firstWhere((s) => s.id == _selSubId!).nameTh}'
+            '${addrCtrl.text.trim().isNotEmpty ? ', ${addrCtrl.text.trim()}' : ''}',
+        gender: _gender,
+      );
+
+      // บันทึกข้อมูลผู้ลงทะเบียน
+      await DbHelper().insert(regData);
+      debugPrint('✅ บันทึกข้อมูลผู้ลงทะเบียนสำเร็จ');
+
+      // แสดงข้อความสำเร็จ
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('บันทึกข้อมูลผู้ลงทะเบียนสำเร็จ'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาด: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // แสดง Dialog พร้อมข้อมูลการเข้าพักที่มีอยู่
+  Future<void> _showStayDialogWithExistingData(
+    String regId,
+    Map<String, dynamic> stayData,
+  ) async {
+    debugPrint('📋 แสดง Dialog พร้อมข้อมูลที่มีอยู่');
+    debugPrint(
+      '📅 ข้อมูล Stay: ${stayData['start_date']} - ${stayData['end_date']}',
+    );
+
+    try {
+      // ดึงข้อมูล reg_additional_info ที่เกี่ยวข้อง
+      final db = await DbHelper().db;
+
+      // ค้นหา additional info ที่เกี่ยวข้องกับ stay นี้
+      final additionalInfoResult = await db.rawQuery(
+        '''
+        SELECT ai.*
+        FROM reg_additional_info ai
+        WHERE ai.regId = ?
+        ORDER BY ai.createdAt DESC
+        LIMIT 1
+      ''',
+        [regId],
+      );
+
+      RegAdditionalInfo? existingInfo;
+      if (additionalInfoResult.isNotEmpty) {
+        existingInfo = RegAdditionalInfo.fromMap(additionalInfoResult.first);
+        debugPrint(
+          '📦 ข้อมูลอุปกรณ์: ${existingInfo.shirtCount} เสื้อ, ${existingInfo.pantsCount} กางเกง',
+        );
+      } else {
+        debugPrint('ℹ️ ไม่พบข้อมูลอุปกรณ์');
+      }
+
+      if (!mounted) return;
+
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => _AdditionalInfoDialog(
+          regId: regId,
+          existingInfo: existingInfo,
+          latestStay: StayRecord.fromMap(stayData),
+          canCreateNew: false, // แก้ไขข้อมูลที่มีอยู่
+        ),
+      );
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการดึงข้อมูลอุปกรณ์: $e');
+      // แสดง Dialog แบบค่าเริ่มต้น
+      await _showAdditionalInfoDialog(regId);
+    }
   }
 
   Future<void> _onSave() async {
@@ -580,8 +820,9 @@ class _ManualFormState extends State<ManualForm> {
       return;
     }
 
-    // ถ้าเป็นกรณีใหม่ (ไม่มีข้อมูลเดิม) ให้ตรวจสอบ validation
+    // กรณีผู้ลงทะเบียนใหม่
     if (!_found) {
+      // ตรวจสอบ validation ของฟอร์ม
       if (!_formKey.currentState!.validate()) return;
       if (_selectedDob == null) {
         ScaffoldMessenger.of(
@@ -595,30 +836,14 @@ class _ManualFormState extends State<ManualForm> {
         );
         return;
       }
-    }
 
-    // ถ้าเป็นกรณีใหม่ ให้บันทึกข้อมูลก่อน
-    if (!_found) {
-      final data = RegData.manual(
-        id: searchCtrl.text.trim(),
-        first: firstCtrl.text.trim(),
-        last: lastCtrl.text.trim(),
-        dob: dobCtrl.text,
-        phone: phoneCtrl.text.trim(),
-        addr:
-            '${AddressService().provinces.firstWhere((p) => p.id == _selProvId!).nameTh}, '
-            '${AddressService().districtsOf(_selProvId!).firstWhere((d) => d.id == _selDistId!).nameTh}, '
-            '${AddressService().subsOf(_selDistId!).firstWhere((s) => s.id == _selSubId!).nameTh}'
-            '${addrCtrl.text.trim().isNotEmpty ? ', ${addrCtrl.text.trim()}' : ''}',
-        gender: _gender,
-      );
-
-      await DbHelper().insert(data);
-      await _showAdditionalInfoDialog(data.id);
-      // ไม่ต้อง pop context ซ้ำที่นี่
+      // เปิด Dialog สำหรับกรอกข้อมูลการเข้าพัก
+      debugPrint('📋 เปิด Dialog สำหรับกรอกข้อมูลการเข้าพัก');
+      await _showStayDialogForNewRegistration();
       return;
     }
 
+    // กรณีผู้ลงทะเบียนที่มีอยู่แล้ว
     if (mounted) Navigator.pop(context);
   }
 
@@ -808,8 +1033,16 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
 
   // บันทึกข้อมูล
   Future<void> _saveStayData() async {
+    debugPrint('🔄 เริ่มบันทึกข้อมูลการเข้าพัก...');
+    debugPrint('📅 วันที่เริ่มต้น: $startDate');
+    debugPrint('📅 วันที่สิ้นสุด: $endDate');
+    debugPrint('👤 RegId: ${widget.regId}');
+    debugPrint('🆕 canCreateNew: ${widget.canCreateNew}');
+    debugPrint('📝 latestStay: ${widget.latestStay?.id}');
+
     final dateValidation = _validateDates();
     if (dateValidation != null) {
+      debugPrint('❌ Validation failed: $dateValidation');
       if (context.mounted) {
         await showDialog(
           context: context,
@@ -836,9 +1069,11 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
     }
 
     try {
+      debugPrint('✅ Validation ผ่านแล้ว เริ่มบันทึกข้อมูล...');
       // บันทึกหรืออัพเดต Stay record
       StayRecord? stayRecordForPrint;
       if (widget.canCreateNew) {
+        debugPrint('🆕 สร้าง Stay ใหม่...');
         // สร้าง Stay ใหม่
         final newStay = StayRecord.create(
           visitorId: widget.regId,
@@ -846,9 +1081,21 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
           endDate: endDate!,
           note: notesCtrl.text.trim(),
         );
-        await DbHelper().insertStay(newStay);
-        stayRecordForPrint = newStay;
+        debugPrint('📝 Stay record ที่จะบันทึก: ${newStay.toMap()}');
+        final stayId = await DbHelper().insertStay(newStay);
+        debugPrint('✅ บันทึก Stay สำเร็จ ID: $stayId');
+        // สร้าง StayRecord ใหม่ที่มี ID ที่ได้จากฐานข้อมูล
+        stayRecordForPrint = StayRecord(
+          id: stayId,
+          visitorId: newStay.visitorId,
+          startDate: newStay.startDate,
+          endDate: newStay.endDate,
+          status: newStay.status,
+          note: newStay.note,
+          createdAt: newStay.createdAt,
+        );
       } else if (widget.latestStay != null) {
+        debugPrint('🔄 อัพเดต Stay ที่มีอยู่...');
         // อัพเดต Stay ที่มีอยู่
         final updatedStay = widget.latestStay!.copyWith(
           startDate: startDate,
@@ -856,13 +1103,16 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
           note: notesCtrl.text.trim(),
         );
         await DbHelper().updateStay(updatedStay);
+        debugPrint('✅ อัพเดต Stay สำเร็จ');
         stayRecordForPrint = updatedStay;
       }
 
       // บันทึกข้อมูลอุปกรณ์แยกสำหรับแต่ละการมาปฏิบัติธรรม
       // สร้าง unique visitId โดยใช้ createdAt ของ stay record
-      final visitId = '${widget.regId}_${stayRecordForPrint!.createdAt.millisecondsSinceEpoch}';
-      
+      final visitId =
+          '${widget.regId}_${stayRecordForPrint!.createdAt.millisecondsSinceEpoch}';
+      debugPrint('🆔 สร้าง visitId: $visitId');
+
       final additionalInfo = RegAdditionalInfo.create(
         regId: widget.regId,
         visitId: visitId, // ใช้ unique visitId สำหรับครั้งนี้
@@ -881,12 +1131,16 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
         notes: '', // หมายเหตุย้ายไป stays table แล้ว
       );
 
+      debugPrint('📦 ข้อมูลอุปกรณ์ที่จะบันทึก: ${additionalInfo.toMap()}');
       await DbHelper().insertAdditionalInfo(additionalInfo);
+      debugPrint('✅ บันทึกข้อมูลอุปกรณ์สำเร็จ');
 
       // ตรวจสอบสถานะเมนูเบิกชุดขาว
       final isWhiteRobeEnabled = await MenuSettingsService().isWhiteRobeEnabled;
+      debugPrint('🖨️ เมนูเบิกชุดขาวเปิดอยู่: $isWhiteRobeEnabled');
 
       if (isWhiteRobeEnabled) {
+        debugPrint('🖨️ เริ่มพิมพ์ใบเสร็จ...');
         // สร้าง QR Code จากข้อมูลการเข้าพัก และพิมพ์ใบเสร็จ
         final regData = await DbHelper().fetchById(widget.regId);
         if (regData != null) {
@@ -895,14 +1149,21 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
             additionalInfo: additionalInfo,
             stayRecord: stayRecordForPrint,
           );
+          debugPrint('✅ พิมพ์ใบเสร็จสำเร็จ');
+        } else {
+          debugPrint('❌ ไม่พบข้อมูลผู้ลงทะเบียน');
         }
+      } else {
+        debugPrint('ℹ️ เมนูเบิกชุดขาวปิดอยู่ ไม่พิมพ์ใบเสร็จ');
       }
-      // ถ้าเมนูเบิกชุดขาวปิดอยู่ ไม่ต้องพิมพ์ใบเสร็จ
 
+      debugPrint('✅ บันทึกข้อมูลเสร็จสิ้น ปิด dialog');
       if (mounted) {
         Navigator.of(context).pop();
       }
     } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการบันทึกข้อมูล: $e');
+      debugPrint('📋 Stack trace: ${StackTrace.current}');
       if (mounted) {
         await showDialog(
           context: context,

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import '../widgets/interactive_map_improved.dart';
 import '../services/map_service.dart';
@@ -259,6 +258,15 @@ class _AccommodationBookingScreenState
     final currentCheckOut = DateTime.parse(occupantInfo['check_out_date']);
     DateTime? newCheckOutDate = currentCheckOut;
 
+    // ดึงข้อมูลการลงทะเบียนเพื่อจำกัดวันที่ขยาย
+    final stayInfo = await _getStayInfo(occupantInfo['visitor_id']);
+    DateTime? maxAllowedDate;
+
+    if (stayInfo != null && stayInfo['endDate'] != null) {
+      maxAllowedDate = DateTime.parse(stayInfo['endDate']);
+      debugPrint('📅 Max allowed date from registration: $maxAllowedDate');
+    }
+
     if (!mounted) return;
 
     final result = await showDialog<DateTime>(
@@ -275,6 +283,63 @@ class _AccommodationBookingScreenState
               Text(
                 'วันที่ออกปัจจุบัน: ${_formatDate(occupantInfo['check_out_date'])}',
               ),
+              if (maxAllowedDate != null) ...[
+                const SizedBox(height: 8),
+                // ตรวจสอบว่าสามารถขยายวันพักได้หรือไม่
+                Builder(
+                  builder: (context) {
+                    final currentCheckOut = DateTime.parse(
+                      occupantInfo['check_out_date'],
+                    );
+                    final firstAvailableDate = currentCheckOut.add(
+                      const Duration(days: 1),
+                    );
+                    final canExtend = !firstAvailableDate.isAfter(
+                      maxAllowedDate!,
+                    );
+
+                    if (canExtend) {
+                      return Text(
+                        'วันที่สูงสุดที่สามารถขยายได้: ${_formatDate(maxAllowedDate!.toIso8601String())}',
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    } else {
+                      return Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          border: Border.all(color: Colors.red.shade200),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              color: Colors.red.shade700,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'ไม่สามารถขยายวันพักได้ เนื่องจากวันที่ออกปัจจุบันเกินกว่าวันที่สิ้นสุดที่ลงทะเบียน',
+                                style: TextStyle(
+                                  color: Colors.red.shade700,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
               const SizedBox(height: 16),
               const Text(
                 'เลือกวันที่สิ้นสุดเข้าพักใหม่:',
@@ -293,28 +358,54 @@ class _AccommodationBookingScreenState
                         const Duration(days: 1),
                       );
 
-                      // ตรวจสอบว่า newCheckOutDate ต้องไม่น้อยกว่า firstAvailableDate
+                      // กำหนดวันที่สูงสุดที่สามารถเลือกได้
+                      final lastAvailableDate =
+                          maxAllowedDate ??
+                          DateTime.now().add(const Duration(days: 365));
+
+                      // ตรวจสอบว่า firstDate ไม่เกิน lastDate
+                      final adjustedFirstDate =
+                          firstAvailableDate.isAfter(lastAvailableDate)
+                          ? lastAvailableDate
+                          : firstAvailableDate;
+
+                      // ตรวจสอบว่า newCheckOutDate ต้องไม่น้อยกว่า adjustedFirstDate
                       DateTime initialDate;
                       if (newCheckOutDate != null &&
                           newCheckOutDate!.isAfter(
-                            firstAvailableDate.subtract(
-                              const Duration(days: 1),
-                            ),
+                            adjustedFirstDate.subtract(const Duration(days: 1)),
                           )) {
                         initialDate = newCheckOutDate!;
                       } else {
-                        initialDate = firstAvailableDate;
+                        initialDate = adjustedFirstDate;
                       }
 
                       debugPrint('📅 currentCheckOut: $currentCheckOut');
                       debugPrint('📅 firstAvailableDate: $firstAvailableDate');
+                      debugPrint('📅 lastAvailableDate: $lastAvailableDate');
+                      debugPrint('📅 adjustedFirstDate: $adjustedFirstDate');
                       debugPrint('📅 initialDate: $initialDate');
+
+                      // ตรวจสอบว่าสามารถแสดง DatePicker ได้หรือไม่
+                      if (adjustedFirstDate.isAfter(lastAvailableDate)) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'ไม่สามารถขยายวันพักได้ เนื่องจากวันที่ออกปัจจุบัน (${_formatDate(currentCheckOut.toIso8601String())}) เกินกว่าวันที่สิ้นสุดที่ลงทะเบียน (${_formatDate(lastAvailableDate.toIso8601String())})',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                        return;
+                      }
 
                       final picked = await showDatePicker(
                         context: context,
                         initialDate: initialDate,
-                        firstDate: firstAvailableDate,
-                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                        firstDate: adjustedFirstDate,
+                        lastDate: lastAvailableDate,
                         locale: const Locale('th'),
                       );
                       debugPrint('📅 เลือกวันที่: $picked');
@@ -366,7 +457,30 @@ class _AccommodationBookingScreenState
             ElevatedButton(
               onPressed: newCheckOutDate == null
                   ? null
-                  : () => Navigator.pop(context, newCheckOutDate),
+                  : () {
+                      // ตรวจสอบว่าวันที่เลือกไม่เกินวันที่ที่ลงทะเบียน
+                      if (maxAllowedDate != null &&
+                          newCheckOutDate!.isAfter(maxAllowedDate)) {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('วันที่ไม่ถูกต้อง'),
+                            content: Text(
+                              'ไม่สามารถขยายวันพักเกินวันที่ที่ลงทะเบียนไว้\n'
+                              'วันที่สูงสุดที่สามารถเลือกได้: ${_formatDate(maxAllowedDate!.toIso8601String())}',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('ตกลง'),
+                              ),
+                            ],
+                          ),
+                        );
+                        return;
+                      }
+                      Navigator.pop(context, newCheckOutDate);
+                    },
               child: const Text('บันทึก'),
             ),
           ],
@@ -384,6 +498,33 @@ class _AccommodationBookingScreenState
     DateTime newCheckOutDate,
   ) async {
     try {
+      // ตรวจสอบว่าวันที่ใหม่ไม่เกินวันที่ที่ลงทะเบียน
+      final stayInfo = await _getStayInfo(occupantInfo['visitor_id']);
+      if (stayInfo != null && stayInfo['endDate'] != null) {
+        final maxAllowedDate = DateTime.parse(stayInfo['endDate']);
+        final newCheckOutDateOnly = DateTime(
+          newCheckOutDate.year,
+          newCheckOutDate.month,
+          newCheckOutDate.day,
+        );
+        final maxAllowedDateOnly = DateTime(
+          maxAllowedDate.year,
+          maxAllowedDate.month,
+          maxAllowedDate.day,
+        );
+
+        if (newCheckOutDateOnly.isAfter(maxAllowedDateOnly)) {
+          debugPrint('❌ Cannot extend beyond registration date');
+          if (mounted) {
+            _showErrorDialog(
+              'ไม่สามารถขยายวันพักเกินวันที่ที่ลงทะเบียนไว้\n'
+              'วันที่สูงสุด: ${_formatDate(maxAllowedDate.toIso8601String())}',
+            );
+          }
+          return;
+        }
+      }
+
       final db = await _dbHelper.db;
       final newCheckOutStr = DateFormat('yyyy-MM-dd').format(newCheckOutDate);
 
@@ -395,12 +536,12 @@ class _AccommodationBookingScreenState
         whereArgs: [occupantInfo['id']],
       );
 
-      // อัพเดตข้อมูลในตาราง reg_additional_info ด้วย
+      // อัพเดตข้อมูลในตาราง stays ด้วย
       await db.update(
-        'reg_additional_info',
-        {'endDate': newCheckOutStr},
-        where: 'regId = ?',
-        whereArgs: [occupantInfo['visitor_id']],
+        'stays',
+        {'end_date': newCheckOutStr},
+        where: 'visitor_id = ? AND status = ?',
+        whereArgs: [occupantInfo['visitor_id'], 'active'],
       );
 
       // รีโหลดข้อมูลห้อง
@@ -693,10 +834,10 @@ class _AccommodationBookingScreenState
         whereArgs: [occupantInfo['id']],
       );
 
-      // อัพเดตข้อมูลใน reg_additional_info เพื่อลบข้อมูลที่พัก
+      // อัพเดตข้อมูลใน reg_additional_info เพื่อลบข้อมูลที่พัก (location)
       await db.update(
         'reg_additional_info',
-        {'location': null, 'endDate': null},
+        {'location': null},
         where: 'regId = ?',
         whereArgs: [occupantInfo['visitor_id']],
       );
@@ -893,17 +1034,17 @@ class _AccommodationBookingScreenState
       final dateStr = DateFormat('yyyy-MM-dd').format(selectedDate);
 
       // ค้นหาผู้ปฏิบัติธรรมที่:
-      // 1. กำลังเข้าพักในวันที่เลือก (startDate <= selectedDate <= endDate)
+      // 1. กำลังเข้าพักในวันที่เลือก (start_date <= selectedDate <= end_date)
       // 2. ยังไม่ได้จองห้องพัก หรือห้องเป็น "ศาลาใหญ่"
       final result = await db.rawQuery(
         '''
-        SELECT DISTINCT r.*
+        SELECT DISTINCT r.*, s.start_date, s.end_date
         FROM regs r
-        INNER JOIN reg_additional_info ai ON r.id = ai.regId
+        LEFT JOIN stays s ON r.id = s.visitor_id AND s.status = 'active'
         WHERE r.status = 'A'
           AND (
-            (ai.startDate IS NOT NULL AND ai.endDate IS NOT NULL AND ai.startDate <= ? AND ai.endDate >= ?) OR
-            (ai.startDate IS NULL OR ai.endDate IS NULL)
+            (s.start_date IS NOT NULL AND s.end_date IS NOT NULL AND DATE(s.start_date) <= ? AND DATE(s.end_date) >= ?) OR
+            (s.start_date IS NULL AND s.end_date IS NULL)
           )
           AND r.id NOT IN (
             SELECT DISTINCT rb.visitor_id
@@ -922,6 +1063,25 @@ class _AccommodationBookingScreenState
       debugPrint('📊 Query for available practitioners on $dateStr:');
       debugPrint('   Found ${result.length} practitioners');
 
+      // Debug: แสดงข้อมูลผู้ปฏิบัติธรรมที่พบ
+      for (var practitioner in result) {
+        debugPrint(
+          '   - ${practitioner['first']} ${practitioner['last']} (ID: ${practitioner['id']})',
+        );
+        if (practitioner['start_date'] != null) {
+          debugPrint(
+            '     Stay period: ${practitioner['start_date']} - ${practitioner['end_date']}',
+          );
+        }
+      }
+
+      // Debug: แสดงข้อมูลผู้ปฏิบัติธรรมที่พบ
+      for (var practitioner in result) {
+        debugPrint(
+          '   - ${practitioner['first']} ${practitioner['last']} (ID: ${practitioner['id']})',
+        );
+      }
+
       if (result.isEmpty) {
         // ตรวจสอบว่ามีคนลงทะเบียนหรือไม่
         final allRegs = await db.query(
@@ -934,35 +1094,48 @@ class _AccommodationBookingScreenState
         // ตรวจสอบว่ามีข้อมูลการเข้าพักหรือไม่
         final allStays = await db.rawQuery(
           '''
-          SELECT ai.*, r.first, r.last
-          FROM reg_additional_info ai
-          INNER JOIN regs r ON ai.regId = r.id
-          WHERE r.status = 'A' AND ai.startDate <= ? AND ai.endDate >= ?
+          SELECT s.*, r.first, r.last
+          FROM stays s
+          INNER JOIN regs r ON s.visitor_id = r.id
+          WHERE r.status = 'A' AND s.status = 'active' AND DATE(s.start_date) <= ? AND DATE(s.end_date) >= ?
         ''',
           [dateStr, dateStr],
         );
         debugPrint('   People staying on $dateStr: ${allStays.length}');
 
-        // ตรวจสอบข้อมูลทั้งหมดใน reg_additional_info
-        final allAdditionalInfo = await db.rawQuery('''
-          SELECT ai.*, r.first, r.last
-          FROM reg_additional_info ai
-          INNER JOIN regs r ON ai.regId = r.id
-          WHERE r.status = 'A'
+        // ตรวจสอบข้อมูลทั้งหมดใน stays
+        final allStaysData = await db.rawQuery('''
+          SELECT s.*, r.first, r.last
+          FROM stays s
+          INNER JOIN regs r ON s.visitor_id = r.id
+          WHERE r.status = 'A' AND s.status = 'active'
         ''');
-        debugPrint(
-          '   All additional info records: ${allAdditionalInfo.length}',
-        );
+        debugPrint('   All active stays records: ${allStaysData.length}');
 
-        for (var info in allAdditionalInfo) {
+        for (var stay in allStaysData) {
           debugPrint(
-            '     - ${info['first']} ${info['last']}: ${info['startDate']} - ${info['endDate']} (regId: ${info['regId']})',
+            '     - ${stay['first']} ${stay['last']}: ${stay['start_date']} - ${stay['end_date']} (visitor_id: ${stay['visitor_id']})',
+          );
+        }
+
+        // ตรวจสอบว่ามีใครลงทะเบียนแต่ไม่มีข้อมูลการเข้าพักหรือไม่
+        final regsWithoutStays = await db.rawQuery('''
+          SELECT r.*
+          FROM regs r
+          LEFT JOIN stays s ON r.id = s.visitor_id AND s.status = 'active'
+          WHERE r.status = 'A' AND s.visitor_id IS NULL
+        ''');
+        debugPrint('   People without stays info: ${regsWithoutStays.length}');
+
+        for (var reg in regsWithoutStays) {
+          debugPrint(
+            '     - ${reg['first']} ${reg['last']} (ID: ${reg['id']}) - No stays info',
           );
         }
 
         for (var stay in allStays) {
           debugPrint(
-            '     - ${stay['first']} ${stay['last']}: ${stay['startDate']} - ${stay['endDate']}',
+            '     - ${stay['first']} ${stay['last']}: ${stay['start_date']} - ${stay['end_date']}',
           );
         }
 
@@ -995,12 +1168,20 @@ class _AccommodationBookingScreenState
 
   Future<void> _processBooking(Room room, String idNumber) async {
     try {
+      debugPrint(
+        '🚀 Starting booking process for ID: $idNumber, Room: ${room.name}',
+      );
+
       // ตรวจสอบว่ามีผู้ปฏิบัติธรรมคนนี้หรือไม่
       final practitioner = await _getPractitionerById(idNumber);
       if (practitioner == null) {
+        debugPrint('❌ Practitioner not found: $idNumber');
         _showErrorDialog('ไม่พบข้อมูลผู้ปฏิบัติธรรมที่มีหมายเลขบัตรประชาชนนี้');
         return;
       }
+      debugPrint(
+        '✅ Practitioner found: ${practitioner.first} ${practitioner.last}',
+      );
 
       // ตรวจสอบว่ากำลังเข้าพักในช่วงเวลานี้หรือไม่
       final isCurrentlyStaying = await _isCurrentlyStaying(
@@ -1008,11 +1189,13 @@ class _AccommodationBookingScreenState
         _selectedDate,
       );
       if (!isCurrentlyStaying) {
+        debugPrint('❌ Practitioner not currently staying on ${_selectedDate}');
         _showErrorDialog(
           'ผู้ปฏิบัติธรรมไม่ได้เข้าพักในช่วงวันที่นี้\nกรุณาตรวจสอบข้อมูลการลงทะเบียน',
         );
         return;
       }
+      debugPrint('✅ Practitioner is currently staying');
 
       // ตรวจสอบว่าไม่ได้จองห้องอื่นในวันเดียวกันแล้ว
       final existingBooking = await _getExistingBookingForDate(
@@ -1020,21 +1203,34 @@ class _AccommodationBookingScreenState
         _selectedDate,
       );
       if (existingBooking != null) {
+        debugPrint('❌ Existing booking found: ${existingBooking['room_name']}');
         _showErrorDialog(
           'ผู้ปฏิบัติธรรมรายนี้ได้จองห้องพักไว้แล้ว หากต้องการเปลี่ยนห้อง กรุณายกเลิกการจองเดิมก่อน\n\nห้องที่จองไว้: ${existingBooking['room_name']}',
         );
         return;
       }
+      debugPrint('✅ No existing booking found');
 
-      // บันทึกการจอง
-      await _saveBooking(room, idNumber, practitioner);
+      // ดึงข้อมูลช่วงเวลาเข้าพักของผู้ปฏิบัติธรรม
+      final stayInfo = await _getStayInfo(idNumber);
+      if (stayInfo == null) {
+        debugPrint('❌ Stay info not found for: $idNumber');
+        _showErrorDialog('ไม่พบข้อมูลการเข้าพักของผู้ปฏิบัติธรรม');
+        return;
+      }
+      debugPrint(
+        '✅ Stay info found: ${stayInfo['startDate']} - ${stayInfo['endDate']}',
+      );
 
-      // รีโหลดข้อมูลห้อง
-      await _updateRoomStatusForDate(_selectedDate);
-
-      _showSuccessDialog(room, practitioner);
+      // กำหนด Logic การจองตามเงื่อนไขใหม่
+      await _processBookingWithDateRange(
+        room,
+        idNumber,
+        practitioner,
+        stayInfo,
+      );
     } catch (e) {
-      debugPrint('Error processing booking: $e');
+      debugPrint('❌ Error processing booking: $e');
       _showErrorDialog('เกิดข้อผิดพลาดในการจองห้อง\nกรุณาลองใหม่อีกครั้ง');
     }
   }
@@ -1054,15 +1250,17 @@ class _AccommodationBookingScreenState
     final db = await _dbHelper.db;
     final dateStr = DateFormat('yyyy-MM-dd').format(checkDate);
 
-    // ตรวจสอบจาก reg_additional_info ว่ามีช่วงเวลาที่ครอบคลุมวันที่ตรวจสอบหรือไม่
-    // รองรับกรณีที่ startDate หรือ endDate เป็น null (ถือว่าสามารถจองได้)
-    final result = await db.query(
-      'reg_additional_info',
-      where: '''regId = ? AND (
-        (startDate IS NOT NULL AND endDate IS NOT NULL AND startDate <= ? AND endDate >= ?) OR
-        (startDate IS NULL OR endDate IS NULL)
-      )''',
-      whereArgs: [idNumber, dateStr, dateStr],
+    // เปลี่ยนไปตรวจสอบจากตาราง stays แทน reg_additional_info
+    // ใช้ rawQuery เพื่อใช้ DATE() function ในการเปรียบเทียบวันที่
+    final result = await db.rawQuery(
+      '''
+      SELECT * FROM stays 
+      WHERE visitor_id = ? 
+        AND status = ? 
+        AND DATE(start_date) <= ? 
+        AND DATE(end_date) >= ?
+      ''',
+      [idNumber, 'active', dateStr, dateStr],
     );
 
     debugPrint(
@@ -1071,11 +1269,479 @@ class _AccommodationBookingScreenState
     if (result.isNotEmpty) {
       final record = result.first;
       debugPrint(
-        '   - startDate: ${record['startDate']}, endDate: ${record['endDate']}',
+        '   - start_date: ${record['start_date']}, end_date: ${record['end_date']}',
       );
+      debugPrint(
+        '   - Comparing: DATE(${record['start_date']}) <= $dateStr AND DATE(${record['end_date']}) >= $dateStr',
+      );
+    } else {
+      debugPrint('   - No matching stay records found');
     }
 
     return result.isNotEmpty;
+  }
+
+  /// ดึงข้อมูลช่วงเวลาเข้าพักของผู้ปฏิบัติธรรม
+  Future<Map<String, dynamic>?> _getStayInfo(String idNumber) async {
+    final db = await _dbHelper.db;
+
+    // เปลี่ยนไปอ่านจากตาราง stays แทน reg_additional_info
+    final result = await db.query(
+      'stays',
+      where: 'visitor_id = ? AND status = ?',
+      whereArgs: [idNumber, 'active'],
+      orderBy: 'created_at DESC',
+      limit: 1,
+    );
+
+    if (result.isNotEmpty) {
+      final stay = result.first;
+      // แปลงข้อมูลให้ตรงกับรูปแบบที่โค้ดเดิมคาดหวัง
+      return {
+        'startDate': stay['start_date'],
+        'endDate': stay['end_date'],
+        'regId': idNumber,
+      };
+    }
+
+    return null;
+  }
+
+  /// Logic การจองใหม่ที่รองรับ Date Range Picker
+  Future<void> _processBookingWithDateRange(
+    Room room,
+    String idNumber,
+    RegData practitioner,
+    Map<String, dynamic> stayInfo,
+  ) async {
+    final currentDate = DateTime.now();
+
+    debugPrint('🔄 Processing booking with date range:');
+    debugPrint(
+      '   Stay info: ${stayInfo['startDate']} - ${stayInfo['endDate']}',
+    );
+    debugPrint('   Current date: $currentDate');
+    debugPrint('   Selected date: $_selectedDate');
+
+    // ตรวจสอบว่ามีข้อมูลวันที่หรือไม่
+    if (stayInfo['startDate'] == null || stayInfo['endDate'] == null) {
+      // ไม่มีข้อมูลวันที่ - ใช้ DateRangePicker
+      debugPrint('🟡 No date info - showing Date Range Picker');
+      await _showDateRangePickerDialog(room, idNumber, practitioner, stayInfo);
+      return;
+    }
+
+    final startDate = DateTime.parse(stayInfo['startDate']);
+    final endDate = DateTime.parse(stayInfo['endDate']);
+
+    // กรณีพัก 1 วัน - จองอัตโนมัติ
+    if (_isSameDay(startDate, endDate)) {
+      debugPrint('🟢 Single day stay - booking automatically for: $startDate');
+      await _saveBooking(room, idNumber, practitioner, startDate, endDate);
+      await _updateRoomStatusForDate(_selectedDate);
+      _showSuccessDialog(room, practitioner, startDate, endDate);
+      return;
+    }
+
+    // กรณีหลายวัน - ใช้ DateRangePicker
+    debugPrint('🟡 Multi-day stay - showing Date Range Picker');
+    await _showDateRangePickerDialog(room, idNumber, practitioner, stayInfo);
+  }
+
+  /// ตรวจสอบว่าเป็นวันเดียวกันหรือไม่
+  bool _isSameDay(DateTime date1, DateTime date2) {
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  /// แสดง Date Range Picker Dialog ที่จำกัดช่วงวันที่ตามข้อมูลการลงทะเบียน
+  Future<void> _showDateRangePickerDialog(
+    Room room,
+    String idNumber,
+    RegData practitioner,
+    Map<String, dynamic> stayInfo,
+  ) async {
+    debugPrint('🎯 _showDateRangePickerDialog called!');
+
+    // ตรวจสอบว่ามีข้อมูลวันที่ลงทะเบียนหรือไม่
+    if (stayInfo['startDate'] == null || stayInfo['endDate'] == null) {
+      debugPrint('❌ No registration date info found');
+      _showErrorDialog(
+        'ไม่พบข้อมูลช่วงเวลาเข้าพักที่ลงทะเบียนไว้\nกรุณาตรวจสอบข้อมูลการลงทะเบียน',
+      );
+      return;
+    }
+
+    // แปลงข้อมูลวันที่จาก String เป็น DateTime
+    final DateTime startDate = DateTime.parse(stayInfo['startDate']);
+    final DateTime endDate = DateTime.parse(stayInfo['endDate']);
+
+    debugPrint('📅 Registration Date Range:');
+    debugPrint('   startDate: $startDate');
+    debugPrint('   endDate: $endDate');
+
+    // กำหนดช่วงวันที่ที่อนุญาตให้เลือกได้
+    // ✅ ตามเงื่อนไขที่ต้องการ: firstDate = startDate, lastDate = endDate
+    final DateTime firstDate = startDate;
+    final DateTime lastDate = endDate;
+
+    // กำหนดช่วงเริ่มต้น (initial range) เป็นช่วงเต็มที่ลงทะเบียนไว้
+    final DateTimeRange initialRange = DateTimeRange(
+      start: startDate,
+      end: endDate,
+    );
+
+    debugPrint('📅 DateRangePicker Configuration:');
+    debugPrint('   firstDate: $firstDate');
+    debugPrint('   lastDate: $lastDate');
+    debugPrint('   initialRange: ${initialRange.start} - ${initialRange.end}');
+
+    // คำนวณจำนวนวันทั้งหมด
+    final int totalDays = endDate.difference(startDate).inDays + 1;
+
+    // สร้างข้อความแสดงผล
+    final String dialogMessage =
+        'ผู้ปฏิบัติธรรมลงทะเบียนเข้าพักทั้งหมด $totalDays วัน\n'
+        '(${_formatDate(startDate.toIso8601String())} - ${_formatDate(endDate.toIso8601String())})\n\n'
+        'กรุณาเลือกช่วงวันที่ที่ต้องการจองห้องพัก';
+
+    if (!mounted) return;
+
+    debugPrint('🎯 About to show DateRangePicker dialog');
+
+    DateTimeRange? selectedRange;
+
+    final result = await showDialog<DateTimeRange>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('จองห้อง ${room.name}'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(dialogMessage, style: const TextStyle(fontSize: 14)),
+
+                const SizedBox(height: 16),
+                const Text(
+                  'เลือกช่วงวันที่:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: InkWell(
+                    onTap: () async {
+                      try {
+                        final picked = await showDateRangePicker(
+                          context: context,
+                          firstDate: firstDate,
+                          lastDate: lastDate,
+                          initialDateRange: selectedRange ?? initialRange,
+                          locale: const Locale('th'),
+                          builder: (context, child) {
+                            return Theme(
+                              data: Theme.of(context).copyWith(
+                                colorScheme: Theme.of(
+                                  context,
+                                ).colorScheme.copyWith(primary: Colors.blue),
+                              ),
+                              child: child!,
+                            );
+                          },
+                          helpText: 'เลือกช่วงวันที่เข้าพัก',
+                          cancelText: 'ยกเลิก',
+                          confirmText: 'ยืนยัน',
+                          saveText: 'บันทึก',
+                          errorFormatText: 'รูปแบบวันที่ไม่ถูกต้อง',
+                          errorInvalidText: 'วันที่ไม่ถูกต้อง',
+                          errorInvalidRangeText: 'ช่วงวันที่ไม่ถูกต้อง',
+                          fieldStartHintText: 'วันเริ่มต้น',
+                          fieldEndHintText: 'วันสิ้นสุด',
+                        );
+
+                        if (picked != null && mounted) {
+                          setState(() {
+                            selectedRange = picked;
+                          });
+                        }
+                      } catch (e) {
+                        debugPrint('Error showing date range picker: $e');
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'เกิดข้อผิดพลาดในการเปิดปฏิทิน: $e',
+                              ),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    child: Row(
+                      children: [
+                        const Icon(Icons.date_range, color: Colors.blue),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            selectedRange == null
+                                ? 'กดเพื่อเลือกช่วงวันที่'
+                                : '${_formatDate(selectedRange!.start.toIso8601String())} - ${_formatDate(selectedRange!.end.toIso8601String())}',
+                            style: TextStyle(
+                              color: selectedRange == null
+                                  ? Colors.grey
+                                  : Colors.black,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (selectedRange != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      border: Border.all(color: Colors.green.shade200),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'จำนวนวันที่เลือก: ${selectedRange!.duration.inDays + 1} วัน',
+                          style: TextStyle(
+                            color: Colors.green.shade700,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'จำนวนวันที่ลงทะเบียน: $totalDays วัน',
+                          style: TextStyle(
+                            color: Colors.green.shade600,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ยกเลิก'),
+            ),
+            ElevatedButton(
+              onPressed: selectedRange == null
+                  ? null
+                  : () {
+                      // ตรวจสอบว่าช่วงวันที่ที่เลือกถูกต้องหรือไม่
+                      final isValid = _validateBookingDateRange(
+                        selectedRange!,
+                        startDate,
+                        endDate,
+                      );
+
+                      if (isValid) {
+                        Navigator.pop(context, selectedRange);
+                      } else {
+                        // แสดง error message ที่ชัดเจน
+                        final errorMessage = _getDateRangeErrorMessage(
+                          selectedRange!,
+                          startDate,
+                          endDate,
+                        );
+
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('ช่วงวันที่ไม่ถูกต้อง'),
+                            content: Text(errorMessage),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text('ตกลง'),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                    },
+              child: const Text('ยืนยันการจอง'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      try {
+        // ตรวจสอบอีกครั้งก่อนบันทึก (Double validation)
+        final finalValidation = _validateBookingDateRange(
+          result,
+          startDate,
+          endDate,
+        );
+
+        if (!finalValidation) {
+          final errorMessage = _getDateRangeErrorMessage(
+            result,
+            startDate,
+            endDate,
+          );
+          debugPrint('❌ Final validation failed: $errorMessage');
+          if (mounted) {
+            _showErrorDialog('การตรวจสอบครั้งสุดท้ายไม่ผ่าน:\n$errorMessage');
+          }
+          return;
+        }
+
+        debugPrint('✅ Final validation passed - saving booking');
+
+        // บันทึกการจอง
+        await _saveBooking(
+          room,
+          idNumber,
+          practitioner,
+          result.start,
+          result.end,
+        );
+        await _updateRoomStatusForDate(_selectedDate);
+
+        if (mounted) {
+          _showSuccessDialog(room, practitioner, result.start, result.end);
+        }
+      } catch (e) {
+        debugPrint('Error saving booking: $e');
+        if (mounted) {
+          _showErrorDialog('เกิดข้อผิดพลาดในการบันทึกการจอง: $e');
+        }
+      }
+    }
+  }
+
+  /// ตรวจสอบความถูกต้องของช่วงวันที่การจองอย่างเคร่งครัด
+  bool _validateBookingDateRange(
+    DateTimeRange selectedRange,
+    DateTime startDate,
+    DateTime endDate,
+  ) {
+    debugPrint('🔍 Validating booking date range:');
+    debugPrint('   Selected: ${selectedRange.start} - ${selectedRange.end}');
+    debugPrint('   Registered: $startDate - $endDate');
+
+    // แปลงเป็นวันที่เท่านั้น (ตัดเวลา) เพื่อเปรียบเทียบ
+    final selectedStartDate = DateTime(
+      selectedRange.start.year,
+      selectedRange.start.month,
+      selectedRange.start.day,
+    );
+    final selectedEndDate = DateTime(
+      selectedRange.end.year,
+      selectedRange.end.month,
+      selectedRange.end.day,
+    );
+    final registeredStartDate = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
+    final registeredEndDate = DateTime(
+      endDate.year,
+      endDate.month,
+      endDate.day,
+    );
+
+    // ตรวจสอบว่าวันเริ่มต้นต้องไม่ก่อนวันที่ลงทะเบียน
+    final startValid =
+        selectedStartDate.isAtSameMomentAs(registeredStartDate) ||
+        selectedStartDate.isAfter(registeredStartDate);
+
+    // ตรวจสอบว่าวันสิ้นสุดต้องไม่หลังวันที่ลงทะเบียน
+    final endValid =
+        selectedEndDate.isAtSameMomentAs(registeredEndDate) ||
+        selectedEndDate.isBefore(registeredEndDate);
+
+    // ตรวจสอบว่าวันเริ่มต้นไม่หลังวันสิ้นสุด
+    final rangeValid =
+        selectedStartDate.isBefore(selectedEndDate) ||
+        _isSameDay(selectedStartDate, selectedEndDate);
+
+    debugPrint(
+      '   Start valid: $startValid, End valid: $endValid, Range valid: $rangeValid',
+    );
+    debugPrint('   Start check: $selectedStartDate >= $registeredStartDate');
+    debugPrint('   End check: $selectedEndDate <= $registeredEndDate');
+
+    return startValid && endValid && rangeValid;
+  }
+
+  /// สร้างข้อความ error ที่ชัดเจนสำหรับช่วงวันที่ที่ไม่ถูกต้อง
+  String _getDateRangeErrorMessage(
+    DateTimeRange selectedRange,
+    DateTime startDate,
+    DateTime endDate,
+  ) {
+    final selectedStart = _formatDate(selectedRange.start.toIso8601String());
+    final selectedEnd = _formatDate(selectedRange.end.toIso8601String());
+    final regStart = _formatDate(startDate.toIso8601String());
+    final regEnd = _formatDate(endDate.toIso8601String());
+
+    // แปลงเป็นวันที่เท่านั้น (ตัดเวลา) เพื่อเปรียบเทียบ
+    final selectedStartDate = DateTime(
+      selectedRange.start.year,
+      selectedRange.start.month,
+      selectedRange.start.day,
+    );
+    final selectedEndDate = DateTime(
+      selectedRange.end.year,
+      selectedRange.end.month,
+      selectedRange.end.day,
+    );
+    final registeredStartDate = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
+    final registeredEndDate = DateTime(
+      endDate.year,
+      endDate.month,
+      endDate.day,
+    );
+
+    String errorMessage =
+        '❌ **ไม่สามารถเลือกวันเกินช่วงที่ลงทะเบียนไว้ได้**\n\n';
+
+    // ตรวจสอบว่าวันเริ่มต้นหรือวันสิ้นสุดที่เกิน
+    if (selectedStartDate.isBefore(registeredStartDate)) {
+      errorMessage +=
+          '• วันเริ่มต้น ($selectedStart) ต้องไม่ก่อนวันที่ลงทะเบียน ($regStart)\n';
+    }
+
+    if (selectedEndDate.isAfter(registeredEndDate)) {
+      errorMessage +=
+          '• วันสิ้นสุด ($selectedEnd) ต้องไม่หลังวันที่ลงทะเบียน ($regEnd)\n';
+    }
+
+    errorMessage += '\n**ช่วงที่เลือก:** $selectedStart - $selectedEnd\n';
+    errorMessage += '**ช่วงที่ลงทะเบียน:** $regStart - $regEnd\n\n';
+    errorMessage += '⚠️ กรุณาเลือกวันที่ระหว่าง $regStart ถึง $regEnd เท่านั้น';
+
+    return errorMessage;
   }
 
   Future<Map<String, dynamic>?> _getExistingBookingForDate(
@@ -1105,16 +1771,19 @@ class _AccommodationBookingScreenState
     Room room,
     String idNumber,
     RegData practitioner,
+    DateTime checkInDate,
+    DateTime checkOutDate,
   ) async {
     final db = await _dbHelper.db;
     final now = DateTime.now();
-    final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+    final checkInStr = DateFormat('yyyy-MM-dd').format(checkInDate);
+    final checkOutStr = DateFormat('yyyy-MM-dd').format(checkOutDate);
 
     await db.insert('room_bookings', {
       'room_id': room.id,
       'visitor_id': idNumber,
-      'check_in_date': dateStr,
-      'check_out_date': dateStr, // จองเป็นรายวัน
+      'check_in_date': checkInStr,
+      'check_out_date': checkOutStr,
       'status': 'confirmed',
       'note': 'จองผ่านระบบ',
       'created_at': now.toIso8601String(),
@@ -1138,7 +1807,12 @@ class _AccommodationBookingScreenState
     );
   }
 
-  void _showSuccessDialog(Room room, RegData practitioner) {
+  void _showSuccessDialog(
+    Room room,
+    RegData practitioner,
+    DateTime checkIn,
+    DateTime checkOut,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1149,9 +1823,10 @@ class _AccommodationBookingScreenState
           children: [
             Text('ห้อง: ${room.name}'),
             Text('ผู้จอง: ${practitioner.first} ${practitioner.last}'),
-            Text(
-              'วันที่: ${DateFormat('dd/MM/yyyy', 'th').format(_selectedDate)}',
-            ),
+            Text('วันที่เข้าพัก: ${_formatDate(checkIn.toIso8601String())}'),
+            Text('วันที่ออก: ${_formatDate(checkOut.toIso8601String())}'),
+            if (_isSameDay(checkIn, checkOut))
+              const Text('(พัก 1 วัน)', style: TextStyle(color: Colors.blue)),
           ],
         ),
         actions: [
@@ -1186,6 +1861,11 @@ class _AccommodationBookingScreenState
             icon: const Icon(Icons.info_outline),
             onPressed: () => _showHelpDialog(),
             tooltip: 'คำแนะนำการใช้งาน',
+          ),
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: () => _showTestDataDialog(),
+            tooltip: 'ทดสอบข้อมูล',
           ),
         ],
       ),
@@ -1461,5 +2141,157 @@ class _AccommodationBookingScreenState
         Text(label, style: const TextStyle(fontSize: 12)),
       ],
     );
+  }
+
+  /// แสดง Dialog ทดสอบข้อมูล
+  void _showTestDataDialog() async {
+    try {
+      final db = await _dbHelper.db;
+      final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate);
+
+      // โหลดข้อมูลจากตาราง stays
+      final stays = await db.query('stays', orderBy: 'created_at DESC');
+
+      // โหลดข้อมูลจากตาราง regs
+      final regs = await db.query(
+        'regs',
+        where: 'status = ?',
+        whereArgs: ['A'],
+      );
+
+      // ทดสอบการเปรียบเทียบวันที่
+      final testQuery = await db.rawQuery(
+        '''
+        SELECT s.*, r.first, r.last
+        FROM stays s
+        INNER JOIN regs r ON s.visitor_id = r.id
+        WHERE r.status = 'A' AND s.status = 'active' AND DATE(s.start_date) <= ? AND DATE(s.end_date) >= ?
+        ''',
+        [dateStr, dateStr],
+      );
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('ข้อมูลทดสอบ'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 500,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('📅 วันที่เลือก: $dateStr'),
+                  Text('📊 จำนวน Stay Records: ${stays.length}'),
+                  Text('👥 จำนวน Active Registrations: ${regs.length}'),
+                  Text('✅ คนที่เข้าพักในวันที่เลือก: ${testQuery.length}'),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '🏠 ข้อมูล Stays:',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  if (stays.isEmpty)
+                    const Text(
+                      'ไม่พบข้อมูลในตาราง stays',
+                      style: TextStyle(color: Colors.grey),
+                    )
+                  else
+                    ...stays
+                        .take(5)
+                        .map(
+                          (stay) => Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Visitor ID: ${stay['visitor_id']}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text('Start: ${stay['start_date']}'),
+                                Text('End: ${stay['end_date']}'),
+                                Text('Status: ${stay['status']}'),
+                              ],
+                            ),
+                          ),
+                        ),
+                  if (stays.length > 5)
+                    Text(
+                      '... และอีก ${stays.length - 5} รายการ',
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '✅ คนที่เข้าพักในวันที่เลือก:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (testQuery.isEmpty)
+                    const Text(
+                      'ไม่พบคนที่เข้าพักในวันที่เลือก',
+                      style: TextStyle(color: Colors.grey),
+                    )
+                  else
+                    ...testQuery.map(
+                      (stay) => Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.green.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${stay['first']} ${stay['last']}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                            Text('Start: ${stay['start_date']}'),
+                            Text('End: ${stay['end_date']}'),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ปิด'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error showing test data: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาด: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

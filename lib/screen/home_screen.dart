@@ -9,6 +9,7 @@ import 'daily_summary.dart';
 import 'visitor_management.dart';
 import 'about_page.dart';
 import 'schedule_screen.dart';
+import 'accommodation_booking_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,20 +25,10 @@ class _HomeScreenState extends State<HomeScreen> {
   
   // Menu visibility states
   bool _whiteRobeEnabled = false;
-  bool _bookingEnabled = false;
+  bool _bookingEnabled = true;  // เปิดเมนูจองที่พักให้แสดง
   bool _scheduleEnabled = true;
   bool _summaryEnabled = true;
 
-  void _showWip(BuildContext ctx) => ScaffoldMessenger.of(ctx).showSnackBar(
-    const SnackBar(
-      content: Text(
-        'ฟังก์ชันนี้อยู่ระหว่างการพัฒนา',
-        style: TextStyle(fontSize: 14),
-      ),
-      behavior: SnackBarBehavior.floating,
-      margin: EdgeInsets.all(16),
-    ),
-  );
 
   // Secret Developer Mode activation
   void _onLogoTap() {
@@ -176,7 +167,10 @@ class _HomeScreenState extends State<HomeScreen> {
         'label': 'จองที่พัก',
         'icon': Icons.bed_outlined,
         'enabled': _bookingEnabled,
-        'onTap': () => _showWip(context),
+        'onTap': () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AccommodationBookingScreen()),
+        ),
       },
       {
         'label': 'ตารางกิจกรรม',

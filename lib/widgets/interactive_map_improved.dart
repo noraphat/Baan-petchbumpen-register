@@ -86,17 +86,17 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     if (widget.mapData?.hasImage == true && widget.mapData?.imagePath != null) {
       try {
         final File imageFile = File(widget.mapData!.imagePath!);
-        debugPrint('Image file exists: ${await imageFile.exists()}');
-        debugPrint('Image file path: ${imageFile.path}');
+        debugPrint(
+          '📁 ตรวจสอบไฟล์: ${await imageFile.exists() ? "มีไฟล์" : "ไม่มีไฟล์"}',
+        );
+        debugPrint('📁 Image file path: ${imageFile.path}');
 
         if (await imageFile.exists()) {
           final bytes = await imageFile.readAsBytes();
-          debugPrint('Image file size: ${bytes.length} bytes');
+          debugPrint('💾 อ่านไฟล์ได้: ${bytes.length} bytes');
 
           final ui.Image image = await decodeImageFromList(bytes);
-          debugPrint(
-            'Image decoded successfully: ${image.width}x${image.height}',
-          );
+          debugPrint('🖼️ decode รูปสำเร็จ: ${image.width}x${image.height}');
 
           if (mounted) {
             setState(() {
@@ -106,6 +106,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
               );
               _isImageLoaded = true;
             });
+            debugPrint('✅ โหลดรูปภาพแผนที่สำเร็จ');
 
             // Auto-fit image when first loaded
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -115,7 +116,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
             });
           }
         } else {
-          debugPrint('ERROR: Image file does not exist!');
+          debugPrint('❌ ERROR: Image file does not exist!');
           if (mounted) {
             setState(() {
               _mapImageSize = const Size(1200, 800);
@@ -124,7 +125,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
           }
         }
       } catch (e) {
-        debugPrint('ERROR loading map image: $e');
+        debugPrint('❌ ERROR loading map image: $e');
         if (mounted) {
           setState(() {
             _mapImageSize = const Size(1200, 800);
@@ -133,7 +134,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
         }
       }
     } else {
-      debugPrint('No image path or hasImage is false');
+      debugPrint('📝 No image path or hasImage is false');
       if (mounted) {
         setState(() {
           _mapImageSize = const Size(1200, 800); // Default size for grid
@@ -157,7 +158,9 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     final containerSize = renderBox.size;
     final imageSize = _mapImageSize!;
 
-    debugPrint('AutoFit - Container: ${containerSize}, Image: ${imageSize}');
+    debugPrint(
+      '📐 Available space: ${containerSize.width}x${containerSize.height}',
+    );
 
     // คำนวณ scale ที่เหมาะสมเพื่อให้รูปภาพพอดีกับ container
     final scaleX = containerSize.width / imageSize.width;
@@ -165,8 +168,6 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     final scale =
         (scaleX < scaleY ? scaleX : scaleY) *
         0.85; // ลดลง 15% เพื่อให้มี margin
-
-    debugPrint('AutoFit scales - X: $scaleX, Y: $scaleY, Final: $scale');
 
     // คำนวณตำแหน่งที่จะทำให้ภาพอยู่กลาง container
     final scaledImageWidth = imageSize.width * scale;
@@ -180,7 +181,9 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
       ..translate(offsetX, offsetY)
       ..scale(scale);
 
-    debugPrint('AutoFit - Offset: ($offsetX, $offsetY), Scale: $scale');
+    debugPrint(
+      '🖼️ Image: ${imageSize.width}x${imageSize.height}, Display: ${scaledImageWidth.toInt()}x${scaledImageHeight.toInt()}, Scale: ${scale.toStringAsFixed(2)}',
+    );
 
     _transformationController.value = matrix;
   }
@@ -194,7 +197,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     debugPrint('HasImage in build: ${widget.mapData?.hasImage}');
 
     if (!_isImageLoaded) {
-      debugPrint('Showing loading indicator');
+      debugPrint('⏳ Showing loading indicator');
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -205,8 +208,9 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
         .where((room) => !room.hasPosition)
         .toList();
 
-    debugPrint('Positioned rooms: ${positionedRooms.length}');
-    debugPrint('Available rooms: ${availableRooms.length}');
+    debugPrint(
+      '📍 ห้องที่วางตำแหน่งแล้ว: ${positionedRooms.length}, ห้องที่ยังไม่ได้วาง: ${availableRooms.length}',
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -326,25 +330,31 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     debugPrint('ImagePath: ${widget.mapData?.imagePath}');
     debugPrint('MapImageSize: $_mapImageSize');
 
-    return Container(
-      width: _mapImageSize?.width ?? 1200,
-      height: _mapImageSize?.height ?? 800,
-      child:
-          widget.mapData?.hasImage == true && widget.mapData?.imagePath != null
-          ? Image.file(
-              File(widget.mapData!.imagePath!),
-              fit: BoxFit.cover, // เปลี่ยนกลับเป็น cover เพื่อคงอัตราส่วน
-              errorBuilder: (context, error, stackTrace) {
-                debugPrint('ERROR loading image in UI: $error');
-                debugPrint('Stack trace: $stackTrace');
-                return _buildGridBackground();
-              },
-              // เพิ่ม cache สำหรับปรับปรุงประสิทธิภาพ
-              cacheWidth: 1920, // จำกัดความกว้างสูงสุด
-              cacheHeight: 1920, // จำกัดความสูงสูงสุด
-            )
-          : _buildGridBackground(),
-    );
+    if (widget.mapData?.hasImage == true && widget.mapData?.imagePath != null) {
+      debugPrint(
+        '🎨 กำลังสร้าง map background - hasImage: true, size: ${_mapImageSize?.width}x${_mapImageSize?.height}',
+      );
+
+      return Container(
+        width: _mapImageSize?.width ?? 1200,
+        height: _mapImageSize?.height ?? 800,
+        child: Image.file(
+          File(widget.mapData!.imagePath!),
+          fit: BoxFit.contain, // เปลี่ยนเป็น contain เพื่อให้เห็นรูปภาพทั้งหมด
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('❌ ERROR loading image in UI: $error');
+            debugPrint('Stack trace: $stackTrace');
+            return _buildGridBackground();
+          },
+          // เพิ่ม cache สำหรับปรับปรุงประสิทธิภาพ
+          cacheWidth: 1920, // จำกัดความกว้างสูงสุด
+          cacheHeight: 1920, // จำกัดความสูงสูงสุด
+        ),
+      );
+    } else {
+      debugPrint('🎨 กำลังสร้าง map background - hasImage: false, แสดง grid');
+      return _buildGridBackground();
+    }
   }
 
   Widget _buildGridBackground() {
@@ -659,10 +669,6 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
 
   // Widget สำหรับห้องที่วางตำแหน่งแล้ว
   Widget _buildPositionedRoomWidget(Room room) {
-    debugPrint(
-      'Building positioned room: ${room.name} at (${room.positionX}, ${room.positionY})',
-    );
-
     final (width, height) = room.getSizeForUI();
 
     // คำนวณตำแหน่งจาก percentage เป็น absolute position
@@ -671,7 +677,7 @@ class _InteractiveMapImprovedState extends State<InteractiveMapImproved> {
     final absoluteY = (room.positionY! / 100) * imageSize.height;
 
     debugPrint(
-      'Room ${room.name}: percentage(${room.positionX}, ${room.positionY}) -> absolute(${absoluteX}, ${absoluteY})',
+      '🏠 แสดงห้อง ${room.name}: ${room.positionX}%,${room.positionY}% → (${absoluteX.toInt()},${absoluteY.toInt()}) size: ${width}x${height}',
     );
 
     return Transform.translate(

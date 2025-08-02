@@ -50,25 +50,35 @@ class _InteractiveMapState extends State<InteractiveMap> {
   }
   
   Future<void> _loadMapImage() async {
+    debugPrint('🔄 กำลังโหลดรูปภาพแผนที่...');
     if (widget.mapData?.hasImage == true) {
+      debugPrint('📸 มีรูปภาพแผนที่: ${widget.mapData!.imagePath}');
       try {
         final File imageFile = File(widget.mapData!.imagePath!);
+        debugPrint('📁 ตรวจสอบไฟล์: ${imageFile.existsSync() ? "มีไฟล์" : "ไม่มีไฟล์"}');
+        
         final bytes = await imageFile.readAsBytes();
+        debugPrint('💾 อ่านไฟล์ได้: ${bytes.length} bytes');
+        
         final ui.Image image = await decodeImageFromList(bytes);
+        debugPrint('🖼️ decode รูปสำเร็จ: ${image.width}x${image.height}');
         
         setState(() {
           _mapImageSize = Size(image.width.toDouble(), image.height.toDouble());
           _isImageLoaded = true;
         });
         
+        debugPrint('✅ โหลดรูปภาพแผนที่สำเร็จ');
+        
         // Auto-fit image when first loaded
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _autoFitImage();
         });
       } catch (e) {
-        debugPrint('Error loading map image: $e');
+        debugPrint('❌ Error loading map image: $e');
       }
     } else {
+      debugPrint('📋 ใช้แผนที่ grid เริ่มต้น (ไม่มีรูปภาพ)');
       setState(() {
         _mapImageSize = const Size(1200, 800); // Default size for grid
         _isImageLoaded = true;
@@ -107,6 +117,8 @@ class _InteractiveMapState extends State<InteractiveMap> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('🔄 Building InteractiveMap - isImageLoaded: $_isImageLoaded, rooms: ${widget.rooms.length}');
+    
     if (!_isImageLoaded) {
       return const Center(
         child: CircularProgressIndicator(),
@@ -115,6 +127,8 @@ class _InteractiveMapState extends State<InteractiveMap> {
     
     final positionedRooms = widget.rooms.where((room) => room.hasPosition).toList();
     final availableRooms = widget.rooms.where((room) => !room.hasPosition).toList();
+    
+    debugPrint('📍 ห้องที่วางตำแหน่งแล้ว: ${positionedRooms.length}, ห้องที่ยังไม่ได้วาง: ${availableRooms.length}');
     
     return Column(
       children: [
@@ -131,19 +145,38 @@ class _InteractiveMapState extends State<InteractiveMap> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: InteractiveViewer(
-                key: _containerKey,
-                transformationController: _transformationController,
-                minScale: 0.1,
-                maxScale: 5.0,
-                boundaryMargin: const EdgeInsets.all(50),
-                constrained: false,
-                scaleEnabled: true,
-                panEnabled: true,
-                child: Container(
-                  width: _mapImageSize?.width ?? 1200,
-                  height: _mapImageSize?.height ?? 800,
-                  child: DragTarget<Room>(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  debugPrint('📐 Available space: ${constraints.maxWidth}x${constraints.maxHeight}');
+                  
+                  // คำนวณขนาดที่เหมาะสม
+                  final availableWidth = constraints.maxWidth;
+                  final availableHeight = constraints.maxHeight;
+                  final imageSize = _mapImageSize ?? const Size(1200, 800);
+                  
+                  // Scale ให้พอดีกับพื้นที่ที่มี
+                  final scaleX = availableWidth / imageSize.width;
+                  final scaleY = availableHeight / imageSize.height;
+                  final scale = (scaleX < scaleY ? scaleX : scaleY).clamp(0.1, 1.0);
+                  
+                  final displayWidth = imageSize.width * scale;
+                  final displayHeight = imageSize.height * scale;
+                  
+                  debugPrint('🖼️ Image: ${imageSize.width}x${imageSize.height}, Display: ${displayWidth.toInt()}x${displayHeight.toInt()}, Scale: ${scale.toStringAsFixed(2)}');
+                  
+                  return InteractiveViewer(
+                    key: _containerKey,
+                    transformationController: _transformationController,
+                    minScale: 0.1,
+                    maxScale: 3.0,
+                    boundaryMargin: const EdgeInsets.all(20),
+                    constrained: true, // เปลี่ยนเป็น true
+                    scaleEnabled: true,
+                    panEnabled: true,
+                    child: SizedBox(
+                      width: displayWidth,
+                      height: displayHeight,
+                      child: DragTarget<Room>(
                     onAccept: (room) {
                       // This will be handled by individual positioned drag targets
                     },
@@ -151,7 +184,7 @@ class _InteractiveMapState extends State<InteractiveMap> {
                       return Stack(
                         children: [
                           // Background Map Image or Grid
-                          _buildMapBackground(),
+                          _buildMapBackground(displayWidth, displayHeight),
                           
                           // Drag target overlay for positioning
                           if (widget.isEditable)
@@ -159,7 +192,7 @@ class _InteractiveMapState extends State<InteractiveMap> {
                           
                           // Room widgets that are already positioned
                           ...positionedRooms.map(
-                            (room) => _buildPositionedRoomWidget(room),
+                            (room) => _buildPositionedRoomWidget(room, displayWidth, displayHeight),
                           ),
                           
                           // Drop zone indicator (when dragging)
@@ -169,7 +202,9 @@ class _InteractiveMapState extends State<InteractiveMap> {
                       );
                     },
                   ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -178,28 +213,71 @@ class _InteractiveMapState extends State<InteractiveMap> {
     );
   }
 
-  Widget _buildMapBackground() {
+  Widget _buildMapBackground(double width, double height) {
+    debugPrint('🎨 กำลังสร้าง map background - hasImage: ${widget.mapData?.hasImage}, size: ${width.toInt()}x${height.toInt()}');
     return Container(
-      width: _mapImageSize?.width ?? 1200,
-      height: _mapImageSize?.height ?? 800,
+      width: width,
+      height: height,
+      color: Colors.blue[50], // เพิ่มสีพื้นหลังเพื่อดูขอบเขต
       child: widget.mapData?.hasImage == true
-          ? Image.file(
-              File(widget.mapData!.imagePath!),
-              fit: BoxFit.fill, // ใช้ fit: BoxFit.fill แทน cover เพื่อให้ครอบคลุมพื้นที่ทั้งหมด
-              errorBuilder: (context, error, stackTrace) => _buildGridBackground(),
+          ? Stack(
+              children: [
+                Image.file(
+                  File(widget.mapData!.imagePath!),
+                  width: width,
+                  height: height,
+                  fit: BoxFit.fill,
+                  errorBuilder: (context, error, stackTrace) {
+                    debugPrint('❌ Error แสดงรูปภาพ: $error');
+                    return _buildGridBackground(width, height);
+                  },
+                  frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                    if (frame == null) {
+                      debugPrint('⏳ กำลังโหลดเฟรมรูปภาพ...');
+                      return Container(
+                        width: width,
+                        height: height,
+                        color: Colors.grey[200],
+                        child: const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    }
+                    debugPrint('✅ แสดงรูปภาพสำเร็จ');
+                    return child;
+                  },
+                ),
+                // เพิ่มข้อความ debug
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    color: Colors.black54,
+                    child: Text(
+                      'รูปภาพ: ${_mapImageSize?.width}x${_mapImageSize?.height}',
+                      style: const TextStyle(color: Colors.white, fontSize: 10),
+                    ),
+                  ),
+                ),
+              ],
             )
-          : _buildGridBackground(),
+          : _buildGridBackground(width, height),
     );
   }
 
-  Widget _buildGridBackground() {
+  Widget _buildGridBackground([double? width, double? height]) {
+    final w = width ?? _mapImageSize?.width ?? 1200;
+    final h = height ?? _mapImageSize?.height ?? 800;
     return Container(
+      width: w,
+      height: h,
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
       ),
       child: CustomPaint(
         painter: GridPainter(),
-        size: Size(_mapImageSize?.width ?? 1200, _mapImageSize?.height ?? 800),
+        size: Size(w, h),
       ),
     );
   }
@@ -390,13 +468,16 @@ class _InteractiveMapState extends State<InteractiveMap> {
   }
 
   // Widget สำหรับห้องที่วางตำแหน่งแล้ว
-  Widget _buildPositionedRoomWidget(Room room) {
+  Widget _buildPositionedRoomWidget(Room room, [double? mapWidth, double? mapHeight]) {
     final (width, height) = room.getSizeForUI();
     
     // คำนวณตำแหน่งจาก percentage เป็น absolute position
-    final imageSize = _mapImageSize ?? const Size(1200, 800);
-    final absoluteX = (room.positionX! / 100) * imageSize.width;
-    final absoluteY = (room.positionY! / 100) * imageSize.height;
+    final mapW = mapWidth ?? _mapImageSize?.width ?? 1200;
+    final mapH = mapHeight ?? _mapImageSize?.height ?? 800;
+    final absoluteX = (room.positionX! / 100) * mapW;
+    final absoluteY = (room.positionY! / 100) * mapH;
+    
+    debugPrint('🏠 แสดงห้อง ${room.name}: ${room.positionX}%,${room.positionY}% → (${absoluteX.toInt()},${absoluteY.toInt()}) size: ${width}x$height');
     
     return Positioned(
       left: absoluteX - (width / 2),

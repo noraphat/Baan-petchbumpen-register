@@ -1477,11 +1477,14 @@ class _AccommodationBookingScreenState
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.warning_amber, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('ไม่สามารถจองได้'),
+            const Icon(Icons.warning_amber, color: Colors.orange),
+            const SizedBox(width: 8),
+            const Flexible(
+              child: Text('ไม่สามารถจองได้', overflow: TextOverflow.ellipsis),
+            ),
           ],
         ),
         content: const Text(
@@ -2132,72 +2135,171 @@ class _AccommodationBookingScreenState
                   color: isToday(_selectedDate)
                       ? Colors.green[50]
                       : Colors.orange[50],
-                  child: Row(
-                    children: [
-                      Icon(
-                        isToday(_selectedDate)
-                            ? Icons.calendar_today
-                            : Icons.calendar_month,
-                        color: isToday(_selectedDate)
-                            ? Colors.green
-                            : Colors.orange,
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'วันที่: ',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        DateFormat('dd/MM/yyyy', 'th').format(_selectedDate),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isToday(_selectedDate)
-                              ? Colors.green[700]
-                              : Colors.orange[700],
-                        ),
-                      ),
-                      if (isToday(_selectedDate)) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            'วันนี้',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final isSmallScreen = constraints.maxWidth < 400;
+
+                      if (isSmallScreen) {
+                        // สำหรับหน้าจอเล็ก - จัดเป็น Column
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  isToday(_selectedDate)
+                                      ? Icons.calendar_today
+                                      : Icons.calendar_month,
+                                  color: isToday(_selectedDate)
+                                      ? Colors.green
+                                      : Colors.orange,
+                                ),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'วันที่: ',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                Expanded(
+                                  child: Text(
+                                    DateFormat(
+                                      'dd/MM/yyyy',
+                                      'th',
+                                    ).format(_selectedDate),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: isToday(_selectedDate)
+                                          ? Colors.green[700]
+                                          : Colors.orange[700],
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
-                      ElevatedButton.icon(
-                        onPressed: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: _selectedDate,
-                            firstDate: DateTime.now(),
-                            lastDate: DateTime.now().add(
-                              const Duration(days: 365),
+                            if (isToday(_selectedDate)) ...[
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'วันนี้',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _selectedDate,
+                                    firstDate: DateTime.now(),
+                                    lastDate: DateTime.now().add(
+                                      const Duration(days: 365),
+                                    ),
+                                    locale: const Locale('th'),
+                                  );
+                                  if (picked != null &&
+                                      picked != _selectedDate) {
+                                    setState(() => _selectedDate = picked);
+                                    await _updateRoomStatusForDate(picked);
+                                  }
+                                },
+                                icon: const Icon(Icons.edit_calendar),
+                                label: const Text('เปลี่ยนวันที่'),
+                              ),
                             ),
-                            locale: const Locale('th'),
-                          );
-                          if (picked != null && picked != _selectedDate) {
-                            setState(() => _selectedDate = picked);
-                            await _updateRoomStatusForDate(picked);
-                          }
-                        },
-                        icon: const Icon(Icons.edit_calendar),
-                        label: const Text('เปลี่ยน'),
-                      ),
-                    ],
+                          ],
+                        );
+                      } else {
+                        // สำหรับหน้าจอใหญ่ - จัดเป็น Row
+                        return Row(
+                          children: [
+                            Icon(
+                              isToday(_selectedDate)
+                                  ? Icons.calendar_today
+                                  : Icons.calendar_month,
+                              color: isToday(_selectedDate)
+                                  ? Colors.green
+                                  : Colors.orange,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'วันที่: ',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            Flexible(
+                              child: Text(
+                                DateFormat(
+                                  'dd/MM/yyyy',
+                                  'th',
+                                ).format(_selectedDate),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: isToday(_selectedDate)
+                                      ? Colors.green[700]
+                                      : Colors.orange[700],
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isToday(_selectedDate)) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Text(
+                                  'วันนี้',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                            const Spacer(),
+                            ElevatedButton.icon(
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: _selectedDate,
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime.now().add(
+                                    const Duration(days: 365),
+                                  ),
+                                  locale: const Locale('th'),
+                                );
+                                if (picked != null && picked != _selectedDate) {
+                                  setState(() => _selectedDate = picked);
+                                  await _updateRoomStatusForDate(picked);
+                                }
+                              },
+                              icon: const Icon(Icons.edit_calendar),
+                              label: const Text('เปลี่ยน'),
+                            ),
+                          ],
+                        );
+                      }
+                    },
                   ),
                 ),
 
@@ -2210,55 +2312,179 @@ class _AccommodationBookingScreenState
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Icon(
-                            isToday(_selectedDate)
-                                ? Icons.info
-                                : Icons.warning_amber,
-                            color: isToday(_selectedDate)
-                                ? Colors.blue
-                                : Colors.orange,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            isToday(_selectedDate)
-                                ? 'คำแนะนำ: คลิกเลือกห้องสีเขียวเพื่อจอง'
-                                : '⚠️ ระบบจำกัดการจองเฉพาะวันปัจจุบันเท่านั้น',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: isToday(_selectedDate)
-                                  ? Colors.blue
-                                  : Colors.orange,
-                            ),
-                          ),
-                        ],
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isSmallScreen = constraints.maxWidth < 350;
+
+                          if (isSmallScreen) {
+                            // สำหรับหน้าจอเล็ก - จัดเป็น Column
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isToday(_selectedDate)
+                                          ? Icons.info
+                                          : Icons.warning_amber,
+                                      color: isToday(_selectedDate)
+                                          ? Colors.blue
+                                          : Colors.orange,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      isToday(_selectedDate)
+                                          ? 'คำแนะนำ:'
+                                          : '⚠️ ข้อจำกัด:',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  isToday(_selectedDate)
+                                      ? 'คลิกเลือกห้องสีเขียวเพื่อจอง'
+                                      : 'ระบบจำกัดการจองเฉพาะวันปัจจุบันเท่านั้น',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isToday(_selectedDate)
+                                        ? Colors.blue
+                                        : Colors.orange,
+                                  ),
+                                ),
+                              ],
+                            );
+                          } else {
+                            // สำหรับหน้าจอใหญ่ - จัดเป็น Row
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  isToday(_selectedDate)
+                                      ? Icons.info
+                                      : Icons.warning_amber,
+                                  color: isToday(_selectedDate)
+                                      ? Colors.blue
+                                      : Colors.orange,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    isToday(_selectedDate)
+                                        ? 'คำแนะนำ: คลิกเลือกห้องสีเขียวเพื่อจอง'
+                                        : '⚠️ ระบบจำกัดการจองเฉพาะวันปัจจุบันเท่านั้น',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: isToday(_selectedDate)
+                                          ? Colors.blue
+                                          : Colors.orange,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
+                        },
                       ),
                       const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 8,
-                        children: [
-                          _buildLegendItem(Colors.green, 'ห้องว่าง (คลิกได้)'),
-                          _buildLegendItem(Colors.red, 'มีผู้เข้าพัก'),
-                          _buildLegendItem(Colors.orange, 'จองแล้ว'),
-                        ],
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isSmallScreen = constraints.maxWidth < 300;
+
+                          if (isSmallScreen) {
+                            // สำหรับหน้าจอเล็ก - จัดเป็น Column
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildLegendItem(
+                                  Colors.green,
+                                  'ห้องว่าง (คลิกได้)',
+                                ),
+                                const SizedBox(height: 4),
+                                _buildLegendItem(Colors.red, 'มีผู้เข้าพัก'),
+                                const SizedBox(height: 4),
+                                _buildLegendItem(Colors.orange, 'จองแล้ว'),
+                              ],
+                            );
+                          } else {
+                            // สำหรับหน้าจอใหญ่ - ใช้ Wrap
+                            return Wrap(
+                              spacing: 16,
+                              runSpacing: 8,
+                              children: [
+                                _buildLegendItem(
+                                  Colors.green,
+                                  'ห้องว่าง (คลิกได้)',
+                                ),
+                                _buildLegendItem(Colors.red, 'มีผู้เข้าพัก'),
+                                _buildLegendItem(Colors.orange, 'จองแล้ว'),
+                              ],
+                            );
+                          }
+                        },
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        'ห้องทั้งหมด: ${_rooms.length} ห้อง | '
-                        'ห้องว่าง: ${_rooms.where((r) => r.status == RoomStatus.available).length} ห้อง'
-                        '${isToday(_selectedDate) ? '' : ' (ไม่สามารถจองได้)'}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isToday(_selectedDate)
-                              ? Colors.grey
-                              : Colors.orange[700],
-                          fontWeight: isToday(_selectedDate)
-                              ? FontWeight.normal
-                              : FontWeight.bold,
-                        ),
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final isSmallScreen = constraints.maxWidth < 350;
+                          final totalRooms = _rooms.length;
+                          final availableRooms = _rooms
+                              .where((r) => r.status == RoomStatus.available)
+                              .length;
+
+                          if (isSmallScreen) {
+                            // สำหรับหน้าจอเล็ก - แยกเป็นหลายบรรทัด
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'ห้องทั้งหมด: $totalRooms ห้อง',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isToday(_selectedDate)
+                                        ? Colors.grey
+                                        : Colors.orange[700],
+                                    fontWeight: isToday(_selectedDate)
+                                        ? FontWeight.normal
+                                        : FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  'ห้องว่าง: $availableRooms ห้อง${isToday(_selectedDate) ? '' : ' (ไม่สามารถจองได้)'}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isToday(_selectedDate)
+                                        ? Colors.grey
+                                        : Colors.orange[700],
+                                    fontWeight: isToday(_selectedDate)
+                                        ? FontWeight.normal
+                                        : FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            );
+                          } else {
+                            // สำหรับหน้าจอใหญ่ - ใช้บรรทัดเดียว
+                            return Text(
+                              'ห้องทั้งหมด: $totalRooms ห้อง | '
+                              'ห้องว่าง: $availableRooms ห้อง'
+                              '${isToday(_selectedDate) ? '' : ' (ไม่สามารถจองได้)'}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isToday(_selectedDate)
+                                    ? Colors.grey
+                                    : Colors.orange[700],
+                                fontWeight: isToday(_selectedDate)
+                                    ? FontWeight.normal
+                                    : FontWeight.bold,
+                              ),
+                            );
+                          }
+                        },
                       ),
                     ],
                   ),
@@ -2350,37 +2576,223 @@ class _AccommodationBookingScreenState
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.help_outline, color: Colors.blue),
-            SizedBox(width: 8),
-            Text('คำแนะนำการใช้งาน'),
+            const Icon(Icons.help_outline, color: Colors.blue),
+            const SizedBox(width: 8),
+            const Flexible(
+              child: Text(
+                'คำแนะนำการใช้งานจองห้องพัก',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
-        content: const SingleChildScrollView(
+        content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                'วิธีการจองห้องพัก:',
+              // Header
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info, color: Colors.blue, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'ระบบจองห้องพักสำหรับผู้ปฏิบัติธรรม',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Prerequisites
+              const Text(
+                '🎯 ข้อกำหนดเบื้องต้น',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
-              SizedBox(height: 8),
-              Text('1. เลือกวันที่ที่ต้องการจอง'),
-              Text('2. คลิกที่ห้องสีเขียว (ห้องว่าง)'),
-              Text('3. กรอกหมายเลขบัตรประชาชน 13 หลัก'),
-              Text('4. ระบบจะตรวจสอบข้อมูลและบันทึกการจอง'),
-              SizedBox(height: 16),
-              Text(
-                'เงื่อนไขการจอง:',
+              const SizedBox(height: 8),
+              const Text('• ต้องลงทะเบียนช่วงเวลาปฏิบัติธรรมก่อน'),
+              const Text('• จองได้เฉพาะในช่วงวันที่ลงทะเบียนไว้'),
+              const Text('• ไม่สามารถจองล่วงหน้าเกินวันสุดท้าย'),
+              const Text('• ไม่สามารถจองย้อนหลังก่อนวันนี้'),
+              const SizedBox(height: 16),
+
+              // How to book
+              const Text(
+                '📋 วิธีการจองห้องพัก',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
-              SizedBox(height: 8),
-              Text('• ต้องเป็นผู้ปฏิบัติธรรมที่ลงทะเบียนแล้ว'),
-              Text('• ต้องอยู่ในช่วงเวลาเข้าพักที่กำหนด'),
-              Text('• หนึ่งคนจองได้หนึ่งห้องต่อวัน'),
-              Text('• ห้องสีแดงคือห้องที่มีผู้เข้าพักแล้ว'),
+              const SizedBox(height: 8),
+              const Text('1. เลือกวันที่เริ่มต้นการจอง'),
+              const Text('2. คลิกที่ห้องสีเขียว (ห้องว่าง)'),
+              const Text('3. เลือกผู้ปฏิบัติธรรมจากรายชื่อ'),
+              const Text('4. กำหนดช่วงวันที่เข้าพัก'),
+              const Text('5. ยืนยันการจอง'),
+              const SizedBox(height: 16),
+
+              // Room status
+              const Text(
+                '🏠 สถานะห้องพัก',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 16,
+                    height: 16,
+                    margin: const EdgeInsets.only(top: 2),
+                    decoration: const BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'ห้องว่าง (สามารถจองได้)',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 16,
+                    height: 16,
+                    margin: const EdgeInsets.only(top: 2),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'ห้องมีผู้เข้าพักแล้ว',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Editing rules
+              const Text(
+                '✏️ การแก้ไขการจอง',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.green.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.check_circle,
+                          color: Colors.green,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 6),
+                        const Expanded(
+                          child: Text(
+                            'ทำได้:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text('• แก้ไขช่วงวันเข้าพัก (ขยาย/ลดวัน)'),
+                    const Text('• เปลี่ยนห้องพัก (ถ้าห้องใหม่ว่างครบ)'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.red.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.cancel, color: Colors.red, size: 16),
+                        const SizedBox(width: 6),
+                        const Expanded(
+                          child: Text(
+                            'ไม่สามารถทำได้:',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text('• ยกเลิกการจองหลังเริ่มเข้าพักแล้ว'),
+                    const Text('• แก้ไขเกินช่วงที่ลงทะเบียนไว้'),
+                    const Text('• เปลี่ยนห้องถ้าห้องใหม่ไม่ว่างครบ'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Important notes
+              const Text(
+                '⚠️ ข้อควรระวัง',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('• ข้อมูลการจองอาจใช้คำนวณค่าที่พัก'),
+                    Text('• การแก้ไขต้องผ่านขั้นตอนควบคุม'),
+                    Text('• หนึ่งคนจองได้หนึ่งห้องต่อวัน'),
+                    Text('• ตรวจสอบช่วงวันให้ถูกต้องก่อนยืนยัน'),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -2408,7 +2820,13 @@ class _AccommodationBookingScreenState
           ),
         ),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 12)),
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }

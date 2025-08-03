@@ -3,6 +3,24 @@ import 'package:intl/intl.dart';
 import 'db_helper.dart';
 import '../models/reg_data.dart';
 
+/// ผลลัพธ์การตรวจสอบการจองห้องพัก
+class BookingValidationResult {
+  final bool isValid;
+  final String? errorMessage;
+
+  const BookingValidationResult({required this.isValid, this.errorMessage});
+
+  /// สร้างผลลัพธ์ที่ถูกต้อง
+  factory BookingValidationResult.success() {
+    return const BookingValidationResult(isValid: true);
+  }
+
+  /// สร้างผลลัพธ์ที่ไม่ถูกต้อง
+  factory BookingValidationResult.error(String message) {
+    return BookingValidationResult(isValid: false, errorMessage: message);
+  }
+}
+
 /// Service สำหรับจัดการการจองห้องพักแยกจากการจัดการวันที่ลงทะเบียน
 class BookingService {
   final DbHelper _dbHelper = DbHelper();
@@ -297,6 +315,203 @@ class BookingService {
       return true;
     } catch (e) {
       debugPrint('❌ เกิดข้อผิดพลาดในการสร้างการจอง: $e');
+      return false;
+    }
+  }
+
+  /// ตรวจสอบว่าสามารถยกเลิกการจองได้หรือไม่
+  /// ห้ามยกเลิกหากเริ่มเข้าพักมาแล้วอย่างน้อย 1 วัน
+  Future<BookingValidationResult> canCancelBooking({
+    required int bookingId,
+    required String visitorId,
+  }) async {
+    try {
+      final db = await _dbHelper.db;
+
+      // ดึงข้อมูลการจอง
+      final bookingResult = await db.query(
+        'room_bookings',
+        where: 'id = ?',
+        whereArgs: [bookingId],
+      );
+
+      if (bookingResult.isEmpty) {
+        return BookingValidationResult.error('ไม่พบข้อมูลการจอง');
+      }
+
+      final booking = bookingResult.first;
+      final checkInDate = DateTime.parse(booking['check_in_date'] as String);
+      final checkOutDate = DateTime.parse(booking['check_out_date'] as String);
+      final today = DateTime.now();
+      final todayOnly = DateTime(today.year, today.month, today.day);
+
+      debugPrint('🔍 ตรวจสอบการยกเลิกการจอง:');
+      debugPrint(
+        '   วันที่เข้า: ${DateFormat('yyyy-MM-dd').format(checkInDate)}',
+      );
+      debugPrint(
+        '   วันที่ออก: ${DateFormat('yyyy-MM-dd').format(checkOutDate)}',
+      );
+      debugPrint(
+        '   วันปัจจุบัน: ${DateFormat('yyyy-MM-dd').format(todayOnly)}',
+      );
+
+      // ตรวจสอบว่าวันที่เข้าเป็นวันในอดีตหรือไม่
+      if (checkInDate.isBefore(todayOnly)) {
+        debugPrint('❌ ห้ามยกเลิก - เริ่มเข้าพักมาแล้ว');
+        return BookingValidationResult.error(
+          'ไม่สามารถยกเลิกการจองได้ เนื่องจากเริ่มเข้าพักมาแล้ว\n'
+          'กรุณาใช้ "ปรับปรุงวันที่เข้าพัก" แทน',
+        );
+      }
+
+      // ตรวจสอบว่าวันที่เข้าเป็นวันปัจจุบันหรือไม่
+      if (checkInDate.isAtSameMomentAs(todayOnly)) {
+        debugPrint('❌ ห้ามยกเลิก - เริ่มเข้าพักวันนี้แล้ว');
+        return BookingValidationResult.error(
+          'ไม่สามารถยกเลิกการจองได้ เนื่องจากเริ่มเข้าพักวันนี้แล้ว\n'
+          'กรุณาใช้ "ปรับปรุงวันที่เข้าพัก" แทน',
+        );
+      }
+
+      debugPrint('✅ สามารถยกเลิกการจองได้');
+      return BookingValidationResult.success();
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการตรวจสอบการยกเลิก: $e');
+      return BookingValidationResult.error('เกิดข้อผิดพลาดในการตรวจสอบ');
+    }
+  }
+
+  /// ตรวจสอบว่าสามารถเปลี่ยนห้องได้หรือไม่
+  /// ต้องตรวจสอบว่าห้องปลายทางว่างครบทุกวันในช่วงที่จะย้าย
+  Future<BookingValidationResult> canTransferRoom({
+    required int currentBookingId,
+    required int targetRoomId,
+    required String visitorId,
+  }) async {
+    try {
+      final db = await _dbHelper.db;
+
+      // ดึงข้อมูลการจองปัจจุบัน
+      final bookingResult = await db.query(
+        'room_bookings',
+        where: 'id = ?',
+        whereArgs: [currentBookingId],
+      );
+
+      if (bookingResult.isEmpty) {
+        return BookingValidationResult.error('ไม่พบข้อมูลการจอง');
+      }
+
+      final booking = bookingResult.first;
+      final checkInDate = DateTime.parse(booking['check_in_date'] as String);
+      final checkOutDate = DateTime.parse(booking['check_out_date'] as String);
+
+      debugPrint('🔍 ตรวจสอบการเปลี่ยนห้อง:');
+      debugPrint('   ห้องปลายทาง: $targetRoomId');
+      debugPrint(
+        '   ช่วงวันที่: ${DateFormat('yyyy-MM-dd').format(checkInDate)} - ${DateFormat('yyyy-MM-dd').format(checkOutDate)}',
+      );
+
+      // ตรวจสอบการจองที่ขัดแย้งในห้องปลายทาง
+      final conflicts = await getExistingRoomBookings(
+        roomId: targetRoomId,
+        startDate: checkInDate,
+        endDate: checkOutDate,
+        excludeBookingId: currentBookingId,
+      );
+
+      if (conflicts.isNotEmpty) {
+        debugPrint('❌ ห้องปลายทางไม่ว่าง');
+        final conflictDates = conflicts
+            .map((c) {
+              final start = DateTime.parse(c['check_in_date'] as String);
+              final end = DateTime.parse(c['check_out_date'] as String);
+              return '${DateFormat('dd/MM/yyyy').format(start)} - ${DateFormat('dd/MM/yyyy').format(end)}';
+            })
+            .join(', ');
+
+        return BookingValidationResult.error(
+          'ไม่สามารถเปลี่ยนห้องได้ เนื่องจากห้องปลายทางไม่ว่างในช่วงวันที่:\n$conflictDates',
+        );
+      }
+
+      debugPrint('✅ สามารถเปลี่ยนห้องได้');
+      return BookingValidationResult.success();
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการตรวจสอบการเปลี่ยนห้อง: $e');
+      return BookingValidationResult.error('เกิดข้อผิดพลาดในการตรวจสอบ');
+    }
+  }
+
+  /// ยกเลิกการจองห้องพัก
+  Future<bool> cancelBooking({
+    required int bookingId,
+    required String visitorId,
+  }) async {
+    try {
+      // ตรวจสอบว่าสามารถยกเลิกได้หรือไม่
+      final validation = await canCancelBooking(
+        bookingId: bookingId,
+        visitorId: visitorId,
+      );
+
+      if (!validation.isValid) {
+        debugPrint('❌ ไม่สามารถยกเลิกได้: ${validation.errorMessage}');
+        return false;
+      }
+
+      final db = await _dbHelper.db;
+
+      // อัพเดตสถานะเป็น cancelled
+      await db.update(
+        'room_bookings',
+        {'status': 'cancelled'},
+        where: 'id = ?',
+        whereArgs: [bookingId],
+      );
+
+      debugPrint('✅ ยกเลิกการจองสำเร็จ');
+      return true;
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการยกเลิก: $e');
+      return false;
+    }
+  }
+
+  /// เปลี่ยนห้องพัก
+  Future<bool> transferRoom({
+    required int currentBookingId,
+    required int targetRoomId,
+    required String visitorId,
+  }) async {
+    try {
+      // ตรวจสอบว่าสามารถเปลี่ยนห้องได้หรือไม่
+      final validation = await canTransferRoom(
+        currentBookingId: currentBookingId,
+        targetRoomId: targetRoomId,
+        visitorId: visitorId,
+      );
+
+      if (!validation.isValid) {
+        debugPrint('❌ ไม่สามารถเปลี่ยนห้องได้: ${validation.errorMessage}');
+        return false;
+      }
+
+      final db = await _dbHelper.db;
+
+      // อัพเดตห้องใหม่
+      await db.update(
+        'room_bookings',
+        {'room_id': targetRoomId},
+        where: 'id = ?',
+        whereArgs: [currentBookingId],
+      );
+
+      debugPrint('✅ เปลี่ยนห้องสำเร็จ');
+      return true;
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการเปลี่ยนห้อง: $e');
       return false;
     }
   }

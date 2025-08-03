@@ -334,6 +334,25 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
     final roomName = booking['room_name'] ?? 'ไม่ระบุ';
     final checkInDate = DateTime.parse(booking['check_in_date']);
     final checkOutDate = DateTime.parse(booking['check_out_date']);
+    final bookingId = booking['id'];
+
+    // ตรวจสอบว่าสามารถยกเลิกได้หรือไม่
+    final validation = await _bookingService.canCancelBooking(
+      bookingId: bookingId,
+      visitorId: widget.visitorId,
+    );
+
+    if (!validation.isValid) {
+      // แสดงข้อความ error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(validation.errorMessage!),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 5),
+        ),
+      );
+      return;
+    }
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -387,7 +406,7 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
     );
 
     if (confirmed == true) {
-      await _cancelBooking(booking['id']);
+      await _cancelBooking(bookingId);
     }
   }
 
@@ -431,22 +450,28 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
 
   Future<void> _cancelBooking(int bookingId) async {
     try {
-      final db = await _bookingService.dbHelper.db;
-      await db.update(
-        'room_bookings',
-        {'status': 'cancelled'},
-        where: 'id = ?',
-        whereArgs: [bookingId],
+      final success = await _bookingService.cancelBooking(
+        bookingId: bookingId,
+        visitorId: widget.visitorId,
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('ยกเลิกการจองห้องพักสำเร็จ'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      await _loadRoomBookings();
-      widget.onBookingUpdated?.call();
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ยกเลิกการจองห้องพักสำเร็จ'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        await _loadRoomBookings();
+        widget.onBookingUpdated?.call();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ไม่สามารถยกเลิกการจองได้'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

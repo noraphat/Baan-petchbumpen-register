@@ -818,15 +818,25 @@ class _AccommodationBookingScreenState
     Room newRoom,
   ) async {
     try {
-      final db = await _dbHelper.db;
-
-      // อัพเดตการจองไปห้องใหม่
-      await db.update(
-        'room_bookings',
-        {'room_id': newRoom.id},
-        where: 'id = ?',
-        whereArgs: [occupantInfo['id']],
+      // ใช้ BookingService เพื่อตรวจสอบและเปลี่ยนห้อง
+      final bookingService = BookingService();
+      final success = await bookingService.transferRoom(
+        currentBookingId: occupantInfo['id'],
+        targetRoomId: newRoom.id!,
+        visitorId: occupantInfo['visitor_id'],
       );
+
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('ไม่สามารถเปลี่ยนห้องได้'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
 
       // รีโหลดข้อมูลห้อง
       await _updateRoomStatusForDate(_selectedDate);

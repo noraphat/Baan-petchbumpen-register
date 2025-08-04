@@ -602,4 +602,176 @@ class BookingService {
       return false;
     }
   }
+
+  /// สรุปการใช้งานห้องพักในช่วงเวลาที่กำหนด
+  Future<List<RoomUsageSummary>> getRoomUsageSummary({
+    required DateTime startDate,
+    required DateTime endDate,
+  }) async {
+    try {
+      final iseSingleDay = startDate.isAtSameMomentAs(endDate) || 
+                          endDate.difference(startDate).inDays == 0;
+      
+      debugPrint('🔍 สรุปการใช้งานห้องพัก');
+      debugPrint('   ช่วงเวลา: ${DateFormat('yyyy-MM-dd').format(startDate)} - ${DateFormat('yyyy-MM-dd').format(endDate)}');
+      debugPrint('   เป็นวันเดียว: $iseSingleDay');
+
+      if (iseSingleDay) {
+        return await _getDailyRoomStatus(startDate);
+      } else {
+        return await _getMultiDayRoomUsage(startDate, endDate);
+      }
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการสรุปการใช้งานห้อง: $e');
+      return [];
+    }
+  }
+
+  /// ดึงสถานะห้องพักรายวัน (สำหรับวันเดียว)
+  Future<List<RoomUsageSummary>> _getDailyRoomStatus(DateTime date) async {
+    final db = await _dbHelper.db;
+    final dateStr = DateFormat('yyyy-MM-dd').format(date);
+    
+    debugPrint('📅 ดึงสถานะห้องพักรายวัน: $dateStr');
+
+    // ดึงข้อมูลห้องทั้งหมดพร้อมสถานะการจอง
+    final result = await db.rawQuery('''
+      SELECT 
+        r.id,
+        r.name,
+        r.status as room_status,
+        r.size,
+        r.capacity,
+        CASE 
+          WHEN rb.id IS NOT NULL THEN 'จองแล้ว'
+          WHEN r.status = 'occupied' THEN 'มีผู้เข้าพัก'
+          WHEN r.status = 'available' THEN 'ว่าง'
+          WHEN r.status = 'maintenance' THEN 'ปิดปรับปรุง'
+          ELSE 'ไม่ทราบสถานะ'
+        END as daily_status,
+        rb.visitor_id,
+        COALESCE(regs.first || ' ' || regs.last, '') as guest_name
+      FROM rooms r
+      LEFT JOIN room_bookings rb ON r.id = rb.room_id 
+        AND rb.status != 'cancelled'
+        AND ? >= rb.check_in_date 
+        AND ? <= rb.check_out_date
+      LEFT JOIN regs ON rb.visitor_id = regs.id
+      ORDER BY r.name
+    ''', [dateStr, dateStr]);
+
+    debugPrint('   พบห้อง ${result.length} ห้อง');
+
+    return result.map((row) => RoomUsageSummary(
+      roomId: row['id'] as int,
+      roomName: row['name'] as String,
+      roomSize: row['size'] as String,
+      capacity: row['capacity'] as int,
+      usageDays: 0, // ไม่ใช้สำหรับรายวัน
+      dailyStatus: row['daily_status'] as String,
+      guestName: row['guest_name'] as String? ?? '',
+      isSingleDay: true,
+    )).toList();
+  }
+
+  /// ดึงจำนวนวันที่ใช้งานห้อง (สำหรับหลายวัน)
+  Future<List<RoomUsageSummary>> _getMultiDayRoomUsage(
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    final db = await _dbHelper.db;
+    final startDateStr = DateFormat('yyyy-MM-dd').format(startDate);
+    final endDateStr = DateFormat('yyyy-MM-dd').format(endDate);
+    
+    debugPrint('📊 ดึงจำนวนวันที่ใช้งานห้อง: $startDateStr - $endDateStr');
+
+    // คำนวณจำนวนวันที่แต่ละห้องถูกใช้งาน
+    final result = await db.rawQuery('''
+      SELECT 
+        r.id,
+        r.name,
+        r.size,
+        r.capacity,
+        COALESCE(usage_data.usage_days, 0) as usage_days,
+        usage_data.total_bookings
+      FROM rooms r
+      LEFT JOIN (
+        SELECT 
+          rb.room_id,
+          COUNT(DISTINCT rb.id) as total_bookings,
+          SUM(
+            CASE 
+              WHEN rb.check_out_date <= ? THEN 
+                julianday(rb.check_out_date) - julianday(MAX(rb.check_in_date, ?)) + 1
+              WHEN rb.check_in_date >= ? THEN
+                julianday(MIN(rb.check_out_date, ?)) - julianday(rb.check_in_date) + 1
+              ELSE
+                julianday(?) - julianday(?) + 1
+            END
+          ) as usage_days
+        FROM room_bookings rb
+        WHERE rb.status != 'cancelled'
+          AND NOT (rb.check_out_date < ? OR rb.check_in_date > ?)
+        GROUP BY rb.room_id
+      ) usage_data ON r.id = usage_data.room_id
+      ORDER BY r.name
+    ''', [
+      endDateStr, startDateStr, // สำหรับ CASE แรก
+      startDateStr, endDateStr, // สำหรับ CASE สอง  
+      endDateStr, startDateStr, // สำหรับ CASE สาม
+      startDateStr, endDateStr  // สำหรับ WHERE clause
+    ]);
+
+    debugPrint('   พบห้อง ${result.length} ห้อง');
+
+    return result.map((row) {
+      final usageDays = (row['usage_days'] as num?)?.toInt() ?? 0;
+      final totalBookings = (row['total_bookings'] as num?)?.toInt() ?? 0;
+      
+      debugPrint('   ห้อง ${row['name']}: ${usageDays} วัน (${totalBookings} การจอง)');
+      
+      return RoomUsageSummary(
+        roomId: row['id'] as int,
+        roomName: row['name'] as String,
+        roomSize: row['size'] as String,
+        capacity: row['capacity'] as int,
+        usageDays: usageDays,
+        dailyStatus: '', // ไม่ใช้สำหรับหลายวัน
+        guestName: '',
+        isSingleDay: false,
+      );
+    }).toList();
+  }
+}
+
+/// คลาสสำหรับเก็บข้อมูลสรุปการใช้งานห้องพัก
+class RoomUsageSummary {
+  final int roomId;
+  final String roomName;
+  final String roomSize;
+  final int capacity;
+  final int usageDays;
+  final String dailyStatus;
+  final String guestName;
+  final bool isSingleDay;
+
+  const RoomUsageSummary({
+    required this.roomId,
+    required this.roomName,
+    required this.roomSize,
+    required this.capacity,
+    required this.usageDays,
+    required this.dailyStatus,
+    required this.guestName,
+    required this.isSingleDay,
+  });
+
+  @override
+  String toString() {
+    if (isSingleDay) {
+      return 'RoomUsageSummary(${roomName}: ${dailyStatus}${guestName.isNotEmpty ? ' - ${guestName}' : ''})';
+    } else {
+      return 'RoomUsageSummary(${roomName}: ${usageDays} วัน)';
+    }
+  }
 }

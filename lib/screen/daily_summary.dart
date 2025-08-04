@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/summary_service.dart';
+import '../services/booking_service.dart';
 
 class DailySummaryScreen extends StatefulWidget {
   const DailySummaryScreen({super.key});
@@ -9,8 +10,10 @@ class DailySummaryScreen extends StatefulWidget {
   State<DailySummaryScreen> createState() => _DailySummaryScreenState();
 }
 
-class _DailySummaryScreenState extends State<DailySummaryScreen> {
+class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProviderStateMixin {
   final SummaryService _summaryService = SummaryService();
+  final BookingService _bookingService = BookingService();
+  late TabController _tabController;
   
   DateTime _selectedDate = DateTime.now();
   String _selectedPeriod = 'today'; // today, week, month, 3months, 6months, year, custom
@@ -20,22 +23,34 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
   DailySummary? _dailySummary;
   PeriodSummary? _periodSummary;
   RepeatVisitorStats? _repeatStats;
+  List<RoomUsageSummary>? _roomSummary;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     
     try {
+      final DateRange range = _selectedPeriod == 'today' 
+          ? DateRange(_selectedDate, _selectedDate)
+          : _getDateRange();
+      
+      // โหลดข้อมูลทั่วไป
       if (_selectedPeriod == 'today') {
         _dailySummary = await _summaryService.getDailySummary(date: _selectedDate);
       } else {
-        final DateRange range = _getDateRange();
         _periodSummary = await _summaryService.getPeriodSummary(
           startDate: range.start,
           endDate: range.end,
@@ -45,6 +60,13 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
           endDate: range.end,
         );
       }
+      
+      // โหลดข้อมูลห้องพัก
+      _roomSummary = await _bookingService.getRoomUsageSummary(
+        startDate: range.start,
+        endDate: range.end,
+      );
+      
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -100,6 +122,22 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
             ],
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          tabs: const [
+            Tab(
+              icon: Icon(Icons.people),
+              text: 'ผู้ปฏิบัติธรรม',
+            ),
+            Tab(
+              icon: Icon(Icons.hotel),
+              text: 'ห้องพัก',
+            ),
+          ],
+        ),
       ),
       body: Column(
         children: [
@@ -107,9 +145,17 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _selectedPeriod == 'today'
-                    ? _buildDailyView()
-                    : _buildPeriodView(),
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      // แท็บผู้ปฏิบัติธรรม (ของเดิม)
+                      _selectedPeriod == 'today'
+                          ? _buildDailyView()
+                          : _buildPeriodView(),
+                      // แท็บห้องพัก (ใหม่)
+                      _buildRoomSummaryView(),
+                    ],
+                  ),
           ),
         ],
       ),
@@ -1017,6 +1063,370 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> {
         content: Text('ส่งออกรายงาน $format - ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป'),
       ),
     );
+  }
+
+  /// สร้างแท็บสรุปผลห้องพัก
+  Widget _buildRoomSummaryView() {
+    if (_roomSummary == null || _roomSummary!.isEmpty) {
+      return _buildEmptyRoomState();
+    }
+
+    final isSingleDay = _roomSummary!.first.isSingleDay;
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // หัวข้อและสถิติรวม
+          _buildRoomSummaryHeader(isSingleDay),
+          const SizedBox(height: 16),
+          
+          // ตารางข้อมูลห้องพัก
+          _buildRoomTable(isSingleDay),
+          
+          if (!isSingleDay) ...[
+            const SizedBox(height: 16),
+            _buildRoomUsageStatistics(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyRoomState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.hotel_outlined,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'ไม่พบข้อมูลห้องพัก',
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'กรุณาตรวจสอบการตั้งค่าหรือเพิ่มข้อมูลห้องพัก',
+            style: TextStyle(
+              color: Colors.grey[500],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoomSummaryHeader(bool isSingleDay) {
+    return _buildSection(
+      isSingleDay ? 'สถานะห้องพักรายวัน' : 'สรุปการใช้งานห้องพัก',
+      Icons.hotel,
+      Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  'ห้องพักทั้งหมด',
+                  _roomSummary!.length.toString(),
+                  Icons.hotel,
+                  Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              if (isSingleDay)
+                Expanded(
+                  child: _buildStatCard(
+                    'ห้องที่มีผู้เข้าพัก',
+                    _roomSummary!.where((r) => r.dailyStatus == 'มีผู้เข้าพัก' || r.dailyStatus == 'จองแล้ว').length.toString(),
+                    Icons.person,
+                    Colors.green,
+                  ),
+                )
+              else
+                Expanded(
+                  child: _buildStatCard(
+                    'ห้องที่มีการใช้งาน',
+                    _roomSummary!.where((r) => r.usageDays > 0).length.toString(),
+                    Icons.check_circle,
+                    Colors.green,
+                  ),
+                ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStatCard(
+                  isSingleDay ? 'ห้องว่าง' : 'อัตราการใช้งานเฉลี่ย',
+                  isSingleDay 
+                      ? _roomSummary!.where((r) => r.dailyStatus == 'ว่าง').length.toString()
+                      : '${_calculateAverageUsage()}%',
+                  isSingleDay ? Icons.hotel : Icons.bar_chart,
+                  isSingleDay ? Colors.orange : Colors.purple,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRoomTable(bool isSingleDay) {
+    return _buildSection(
+      'รายละเอียดแต่ละห้อง',
+      Icons.list,
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          headingRowColor: WidgetStateProperty.all(Colors.grey[100]),
+          columns: _buildRoomTableColumns(isSingleDay),
+          rows: _roomSummary!.map((summary) => _buildRoomTableRow(summary, isSingleDay)).toList(),
+        ),
+      ),
+    );
+  }
+
+  List<DataColumn> _buildRoomTableColumns(bool isSingleDay) {
+    if (isSingleDay) {
+      return const [
+        DataColumn(
+          label: Text('ห้องพัก', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        DataColumn(
+          label: Text('ขนาด', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        DataColumn(
+          label: Text('สถานะ', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        DataColumn(
+          label: Text('ผู้เข้าพัก', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      ];
+    } else {
+      return const [
+        DataColumn(
+          label: Text('ห้องพัก', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        DataColumn(
+          label: Text('ขนาด', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        DataColumn(
+          label: Text('วันที่ใช้งาน', style: TextStyle(fontWeight: FontWeight.bold)),
+          numeric: true,
+        ),
+        DataColumn(
+          label: Text('อัตราการใช้งาน', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      ];
+    }
+  }
+
+  DataRow _buildRoomTableRow(RoomUsageSummary summary, bool isSingleDay) {
+    if (isSingleDay) {
+      final statusColor = _getRoomStatusColor(summary.dailyStatus);
+      
+      return DataRow(
+        cells: [
+          DataCell(
+            Text(
+              summary.roomName,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          DataCell(Text(summary.roomSize)),
+          DataCell(
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: statusColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                summary.dailyStatus,
+                style: TextStyle(
+                  color: statusColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          DataCell(
+            Text(
+              summary.guestName.isEmpty ? '-' : summary.guestName,
+              style: TextStyle(
+                color: summary.guestName.isEmpty ? Colors.grey : Colors.black,
+              ),
+            ),
+          ),
+        ],
+      );
+    } else {
+      final dateRange = _getDateRange();
+      final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
+      final usagePercentage = totalDays > 0 ? (summary.usageDays / totalDays * 100).round() : 0;
+      
+      return DataRow(
+        cells: [
+          DataCell(
+            Text(
+              summary.roomName,
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+          DataCell(Text(summary.roomSize)),
+          DataCell(
+            Text(
+              '${summary.usageDays} วัน',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: summary.usageDays > 0 ? Colors.green[700] : Colors.grey[600],
+              ),
+            ),
+          ),
+          DataCell(
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 60,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: usagePercentage / 100,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _getUsageColor(usagePercentage),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '$usagePercentage%',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[700],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+  }
+
+  Widget _buildRoomUsageStatistics() {
+    final dateRange = _getDateRange();
+    final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
+    final totalRooms = _roomSummary!.length;
+    final occupiedRooms = _roomSummary!.where((s) => s.usageDays > 0).length;
+    final totalUsageDays = _roomSummary!.fold<int>(0, (sum, s) => sum + s.usageDays);
+    final averageUsage = totalRooms > 0 ? (totalUsageDays / (totalRooms * totalDays) * 100).round() : 0;
+    
+    return _buildSection(
+      'สถิติการใช้งาน',
+      Icons.bar_chart,
+      Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  'ห้องที่มีการใช้งาน',
+                  '$occupiedRooms/$totalRooms ห้อง',
+                  Icons.check_circle,
+                  Colors.green,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStatCard(
+                  'อัตราการใช้งานเฉลี่ย',
+                  '$averageUsage%',
+                  Icons.trending_up,
+                  Colors.blue,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  'รวมวันที่ใช้งาน',
+                  '$totalUsageDays วัน',
+                  Icons.calendar_today,
+                  Colors.purple,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStatCard(
+                  'ช่วงเวลาที่วิเคราะห์',
+                  '$totalDays วัน',
+                  Icons.date_range,
+                  Colors.orange,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getRoomStatusColor(String status) {
+    switch (status) {
+      case 'จองแล้ว':
+        return Colors.orange[700]!;
+      case 'มีผู้เข้าพัก':
+        return Colors.red[700]!;
+      case 'ว่าง':
+        return Colors.green[700]!;
+      case 'ปิดปรับปรุง':
+        return Colors.grey[700]!;
+      default:
+        return Colors.grey[600]!;
+    }
+  }
+
+  Color _getUsageColor(int percentage) {
+    if (percentage >= 80) return Colors.red[600]!;
+    if (percentage >= 60) return Colors.orange[600]!;
+    if (percentage >= 40) return Colors.yellow[700]!;
+    if (percentage >= 20) return Colors.lightGreen[600]!;
+    return Colors.green[600]!;
+  }
+
+  int _calculateAverageUsage() {
+    if (_roomSummary == null || _roomSummary!.isEmpty) return 0;
+    
+    final dateRange = _getDateRange();
+    final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
+    final totalRooms = _roomSummary!.length;
+    final totalUsageDays = _roomSummary!.fold<int>(0, (sum, s) => sum + s.usageDays);
+    
+    return totalRooms > 0 && totalDays > 0 
+        ? (totalUsageDays / (totalRooms * totalDays) * 100).round() 
+        : 0;
   }
 }
 

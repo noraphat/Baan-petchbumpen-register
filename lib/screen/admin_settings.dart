@@ -16,6 +16,7 @@ class _AdminSettingsState extends State<AdminSettings> {
   // Menu visibility toggles
   bool _whiteRobeEnabled = false;  // ค่าเริ่มต้นปิด
   bool _bookingEnabled = false;    // ค่าเริ่มต้นปิด
+  bool _debugRoomMenuEnabled = false; // ค่าเริ่มต้นปิด
   
   // Auto backup toggle
   bool _autoBackupEnabled = false;
@@ -36,10 +37,12 @@ class _AdminSettingsState extends State<AdminSettings> {
     final menuService = MenuSettingsService();
     final whiteRobeEnabled = await menuService.isWhiteRobeEnabled;
     final bookingEnabled = await menuService.isBookingEnabled;
+    final debugRoomMenuEnabled = await menuService.isDebugRoomMenuEnabled;
     
     setState(() {
       _whiteRobeEnabled = whiteRobeEnabled;
       _bookingEnabled = bookingEnabled;
+      _debugRoomMenuEnabled = debugRoomMenuEnabled;
     });
   }
   
@@ -351,6 +354,22 @@ class _AdminSettingsState extends State<AdminSettings> {
                     content: Text(value 
                       ? 'เปิดเมนู "จองที่พัก" แล้ว' 
                       : 'ปิดเมนู "จองที่พัก" แล้ว'
+                    ),
+                  ),
+                );
+              }
+            }),
+            _buildMenuToggle('Debug จองที่พัก', _debugRoomMenuEnabled, (value) async {
+              debugPrint('Setting Debug Room Menu to: $value');
+              setState(() => _debugRoomMenuEnabled = value);
+              await MenuSettingsService().setDebugRoomMenuEnabled(value);
+              debugPrint('Debug Room Menu setting saved: $value');
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(value 
+                      ? 'เปิด Debug Menu จองที่พักแล้ว' 
+                      : 'ปิด Debug Menu จองที่พักแล้ว'
                     ),
                   ),
                 );

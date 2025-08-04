@@ -4,6 +4,7 @@ import '../widgets/interactive_map_improved.dart';
 import '../services/map_service.dart';
 import '../services/db_helper.dart';
 import '../services/booking_service.dart';
+import '../services/menu_settings_service.dart';
 import '../models/room_model.dart';
 import '../models/reg_data.dart';
 import '../utils/stay_duration_validator.dart';
@@ -26,11 +27,27 @@ class _AccommodationBookingScreenState
   List<Room> _rooms = [];
   DateTime _selectedDate = DateTime.now();
   bool _isLoading = true;
+  bool _debugMenuEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _loadMapAndRooms();
+    _loadDebugMenuSetting();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadDebugMenuSetting();
+  }
+
+  Future<void> _loadDebugMenuSetting() async {
+    final menuService = MenuSettingsService();
+    final debugEnabled = await menuService.isDebugRoomMenuEnabled;
+    setState(() {
+      _debugMenuEnabled = debugEnabled;
+    });
   }
 
   Future<void> _loadMapAndRooms() async {
@@ -2066,23 +2083,25 @@ class _AccommodationBookingScreenState
         title: const Text('จองที่พัก'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const TestMapDisplayScreen()),
+          if (_debugMenuEnabled) ...[
+            IconButton(
+              icon: const Icon(Icons.bug_report),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const TestMapDisplayScreen()),
+              ),
+              tooltip: 'หน้าทดสอบแผนที่',
             ),
-            tooltip: 'หน้าทดสอบแผนที่',
-          ),
+            IconButton(
+              icon: const Icon(Icons.bug_report),
+              onPressed: () => _showTestDataDialog(),
+              tooltip: 'ทดสอบข้อมูล',
+            ),
+          ],
           IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: () => _showHelpDialog(),
             tooltip: 'คำแนะนำการใช้งาน',
-          ),
-          IconButton(
-            icon: const Icon(Icons.bug_report),
-            onPressed: () => _showTestDataDialog(),
-            tooltip: 'ทดสอบข้อมูล',
           ),
         ],
       ),
@@ -2106,19 +2125,20 @@ class _AccommodationBookingScreenState
                     style: TextStyle(color: Colors.grey),
                   ),
                   const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: _createTestMapAndRooms,
-                    icon: const Icon(Icons.add_business),
-                    label: const Text('สร้างข้อมูลทดสอบ'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
+                  if (_debugMenuEnabled)
+                    ElevatedButton.icon(
+                      onPressed: _createTestMapAndRooms,
+                      icon: const Icon(Icons.add_business),
+                      label: const Text('สร้างข้อมูลทดสอบ'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                       ),
                     ),
-                  ),
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: () => Navigator.pop(context),

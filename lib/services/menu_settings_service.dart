@@ -10,6 +10,7 @@ class MenuSettingsService {
   static const String _bookingEnabledKey = 'menu_booking_enabled';
   static const String _scheduleEnabledKey = 'menu_schedule_enabled';
   static const String _summaryEnabledKey = 'menu_summary_enabled';
+  static const String _debugRoomMenuEnabledKey = 'menu_debug_room_enabled';
 
   // Menu visibility getters
   Future<bool> get isWhiteRobeEnabled async {
@@ -30,6 +31,11 @@ class MenuSettingsService {
   Future<bool> get isSummaryEnabled async {
     final dbHelper = DbHelper();
     return await dbHelper.getBoolSetting(_summaryEnabledKey, defaultValue: true);
+  }
+
+  Future<bool> get isDebugRoomMenuEnabled async {
+    final dbHelper = DbHelper();
+    return await dbHelper.getBoolSetting(_debugRoomMenuEnabledKey, defaultValue: false);
   }
 
   // Menu visibility setters
@@ -53,6 +59,11 @@ class MenuSettingsService {
     await dbHelper.setBoolSetting(_summaryEnabledKey, enabled);
   }
 
+  Future<void> setDebugRoomMenuEnabled(bool enabled) async {
+    final dbHelper = DbHelper();
+    await dbHelper.setBoolSetting(_debugRoomMenuEnabledKey, enabled);
+  }
+
   // Get all menu settings at once
   Future<Map<String, bool>> getAllMenuSettings() async {
     final dbHelper = DbHelper();
@@ -66,5 +77,6 @@ class MenuSettingsService {
     await dbHelper.setBoolSetting(_bookingEnabledKey, false);
     await dbHelper.setBoolSetting(_scheduleEnabledKey, true);
     await dbHelper.setBoolSetting(_summaryEnabledKey, true);
+    await dbHelper.setBoolSetting(_debugRoomMenuEnabledKey, false);
   }
 }

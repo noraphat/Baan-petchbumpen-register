@@ -1,0 +1,42 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_petchbumpen_register/screen/developer_settings.dart';
+
+void main() {
+  group('DeveloperSettingsScreen Unit Tests', () {
+    testWidgets('should display developer settings screen', (WidgetTester tester) async {
+      await tester.pumpWidget(const MaterialApp(home: DeveloperSettingsScreen()));
+
+      // ตรวจสอบว่ามี AppBar
+      expect(find.byType(AppBar), findsOneWidget);
+    });
+
+    testWidgets('should display deleted records section', (WidgetTester tester) async {
+      await tester.pumpWidget(const MaterialApp(home: DeveloperSettingsScreen()));
+
+      // ตรวจสอบว่ามีส่วนแสดงข้อมูลที่ถูกลบ
+      expect(find.text('ข้อมูลที่ถูกลบ'), findsOneWidget);
+    });
+
+    testWidgets('should display map management button', (WidgetTester tester) async {
+      await tester.pumpWidget(const MaterialApp(home: DeveloperSettingsScreen()));
+
+      // ตรวจสอบว่ามีปุ่มจัดการแผนที่
+      expect(find.text('จัดการแผนที่'), findsOneWidget);
+    });
+
+    testWidgets('should display loading indicator initially', (WidgetTester tester) async {
+      await tester.pumpWidget(const MaterialApp(home: DeveloperSettingsScreen()));
+
+      // ตรวจสอบว่ามี CircularProgressIndicator เมื่อเริ่มต้น
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('should display deleted records list', (WidgetTester tester) async {
+      await tester.pumpWidget(const MaterialApp(home: DeveloperSettingsScreen()));
+
+      // ตรวจสอบว่ามี ListView สำหรับแสดงข้อมูลที่ถูกลบ
+      expect(find.byType(ListView), findsOneWidget);
+    });
+  });
+}

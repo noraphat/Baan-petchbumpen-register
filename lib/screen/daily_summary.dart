@@ -10,16 +10,18 @@ class DailySummaryScreen extends StatefulWidget {
   State<DailySummaryScreen> createState() => _DailySummaryScreenState();
 }
 
-class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProviderStateMixin {
+class _DailySummaryScreenState extends State<DailySummaryScreen>
+    with TickerProviderStateMixin {
   final SummaryService _summaryService = SummaryService();
   final BookingService _bookingService = BookingService();
   late TabController _tabController;
-  
+
   DateTime _selectedDate = DateTime.now();
-  String _selectedPeriod = 'today'; // today, week, month, 3months, 6months, year, custom
+  String _selectedPeriod =
+      'today'; // today, week, month, 3months, 6months, year, custom
   DateTime? _customStartDate;
   DateTime? _customEndDate;
-  
+
   DailySummary? _dailySummary;
   PeriodSummary? _periodSummary;
   RepeatVisitorStats? _repeatStats;
@@ -41,15 +43,17 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    
+
     try {
-      final DateRange range = _selectedPeriod == 'today' 
+      final DateRange range = _selectedPeriod == 'today'
           ? DateRange(_selectedDate, _selectedDate)
           : _getDateRange();
-      
+
       // โหลดข้อมูลทั่วไป
       if (_selectedPeriod == 'today') {
-        _dailySummary = await _summaryService.getDailySummary(date: _selectedDate);
+        _dailySummary = await _summaryService.getDailySummary(
+          date: _selectedDate,
+        );
       } else {
         _periodSummary = await _summaryService.getPeriodSummary(
           startDate: range.start,
@@ -60,18 +64,17 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
           endDate: range.end,
         );
       }
-      
+
       // โหลดข้อมูลห้องพัก
       _roomSummary = await _bookingService.getRoomUsageSummary(
         startDate: range.start,
         endDate: range.end,
       );
-      
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
       }
     } finally {
       setState(() => _isLoading = false);
@@ -85,7 +88,10 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
         final start = now.subtract(Duration(days: now.weekday - 1));
         return DateRange(start, start.add(const Duration(days: 6)));
       case 'month':
-        return DateRange(DateTime(now.year, now.month, 1), DateTime(now.year, now.month + 1, 0));
+        return DateRange(
+          DateTime(now.year, now.month, 1),
+          DateTime(now.year, now.month + 1, 0),
+        );
       case '3months':
         return DateRange(DateTime(now.year, now.month - 2, 1), now);
       case '6months':
@@ -128,14 +134,8 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: const [
-            Tab(
-              icon: Icon(Icons.people),
-              text: 'ผู้ปฏิบัติธรรม',
-            ),
-            Tab(
-              icon: Icon(Icons.hotel),
-              text: 'ห้องพัก',
-            ),
+            Tab(icon: Icon(Icons.people), text: 'ผู้ปฏิบัติธรรม'),
+            Tab(icon: Icon(Icons.hotel), text: 'ห้องพัก'),
           ],
         ),
       ),
@@ -185,10 +185,22 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
                     DropdownMenuItem(value: 'today', child: Text('วันนี้')),
                     DropdownMenuItem(value: 'week', child: Text('สัปดาห์นี้')),
                     DropdownMenuItem(value: 'month', child: Text('เดือนนี้')),
-                    DropdownMenuItem(value: '3months', child: Text('3 เดือนย้อนหลัง')),
-                    DropdownMenuItem(value: '6months', child: Text('6 เดือนย้อนหลัง')),
-                    DropdownMenuItem(value: 'year', child: Text('1 ปีย้อนหลัง')),
-                    DropdownMenuItem(value: 'custom', child: Text('กำหนดช่วงเอง')),
+                    DropdownMenuItem(
+                      value: '3months',
+                      child: Text('3 เดือนย้อนหลัง'),
+                    ),
+                    DropdownMenuItem(
+                      value: '6months',
+                      child: Text('6 เดือนย้อนหลัง'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'year',
+                      child: Text('1 ปีย้อนหลัง'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'custom',
+                      child: Text('กำหนดช่วงเอง'),
+                    ),
                   ],
                 ),
               ),
@@ -336,11 +348,11 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
                 ),
               ),
               Text(
-                DateFormat('วันEEEE ที่ dd MMMM yyyy', 'th').format(_selectedDate),
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
+                DateFormat(
+                  'วันEEEE ที่ dd MMMM yyyy',
+                  'th',
+                ).format(_selectedDate),
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
             ],
           ),
@@ -376,10 +388,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
               ),
               Text(
                 '${DateFormat('dd/MM/yyyy').format(range.start)} - ${DateFormat('dd/MM/yyyy').format(range.end)}',
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 14,
-                ),
+                style: const TextStyle(color: Colors.white70, fontSize: 14),
               ),
             ],
           ),
@@ -458,7 +467,12 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -487,10 +501,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
           const SizedBox(height: 4),
           Text(
             title,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             textAlign: TextAlign.center,
           ),
         ],
@@ -504,9 +515,15 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
       Icons.people_alt,
       Column(
         children: [
-          _buildGenderRow('ผู้เข้าพักทั้งหมด', _dailySummary!.activeStaysByGender),
+          _buildGenderRow(
+            'ผู้เข้าพักทั้งหมด',
+            _dailySummary!.activeStaysByGender,
+          ),
           const Divider(),
-          _buildGenderRow('ลงทะเบียนใหม่', _dailySummary!.newRegistrationsByGender),
+          _buildGenderRow(
+            'ลงทะเบียนใหม่',
+            _dailySummary!.newRegistrationsByGender,
+          ),
           const Divider(),
           _buildGenderRow('เช็คเอาท์วันนี้', _dailySummary!.checkoutsByGender),
         ],
@@ -576,11 +593,27 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
             spacing: 12,
             runSpacing: 12,
             children: [
-              _buildEquipmentChip('เสื้อขาว', equipment.totalShirts, Icons.checkroom),
-              _buildEquipmentChip('กางเกงขาว', equipment.totalPants, Icons.checkroom_outlined),
+              _buildEquipmentChip(
+                'เสื้อขาว',
+                equipment.totalShirts,
+                Icons.checkroom,
+              ),
+              _buildEquipmentChip(
+                'กางเกงขาว',
+                equipment.totalPants,
+                Icons.checkroom_outlined,
+              ),
               _buildEquipmentChip('เสื่อ', equipment.totalMats, Icons.bed),
-              _buildEquipmentChip('หมอน', equipment.totalPillows, Icons.airline_seat_individual_suite),
-              _buildEquipmentChip('ผ้าห่ม', equipment.totalBlankets, Icons.hotel),
+              _buildEquipmentChip(
+                'หมอน',
+                equipment.totalPillows,
+                Icons.airline_seat_individual_suite,
+              ),
+              _buildEquipmentChip(
+                'ผ้าห่ม',
+                equipment.totalBlankets,
+                Icons.hotel,
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -672,9 +705,15 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
       Icons.people_alt,
       Column(
         children: [
-          _buildGenderRow('ผู้เข้าพักในช่วงเวลา', _periodSummary!.staysByGender),
+          _buildGenderRow(
+            'ผู้เข้าพักในช่วงเวลา',
+            _periodSummary!.staysByGender,
+          ),
           const Divider(),
-          _buildGenderRow('ผู้ลงทะเบียนใหม่ในช่วงเวลา', _periodSummary!.newRegistrationsByGender),
+          _buildGenderRow(
+            'ผู้ลงทะเบียนใหม่ในช่วงเวลา',
+            _periodSummary!.newRegistrationsByGender,
+          ),
           const SizedBox(height: 16),
           _buildTotalSummaryRow(),
         ],
@@ -716,10 +755,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
               ),
               Text(
                 'คน',
-                style: TextStyle(
-                  color: Colors.purple.shade600,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: Colors.purple.shade600, fontSize: 12),
               ),
             ],
           ),
@@ -751,10 +787,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
               ),
               Text(
                 'คน',
-                style: TextStyle(
-                  color: Colors.purple.shade600,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: Colors.purple.shade600, fontSize: 12),
               ),
             ],
           ),
@@ -774,11 +807,27 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
             spacing: 12,
             runSpacing: 12,
             children: [
-              _buildEquipmentChip('เสื้อขาว', equipment.totalShirts, Icons.checkroom),
-              _buildEquipmentChip('กางเกงขาว', equipment.totalPants, Icons.checkroom_outlined),
+              _buildEquipmentChip(
+                'เสื้อขาว',
+                equipment.totalShirts,
+                Icons.checkroom,
+              ),
+              _buildEquipmentChip(
+                'กางเกงขาว',
+                equipment.totalPants,
+                Icons.checkroom_outlined,
+              ),
               _buildEquipmentChip('เสื่อ', equipment.totalMats, Icons.bed),
-              _buildEquipmentChip('หมอน', equipment.totalPillows, Icons.airline_seat_individual_suite),
-              _buildEquipmentChip('ผ้าห้ม', equipment.totalBlankets, Icons.hotel),
+              _buildEquipmentChip(
+                'หมอน',
+                equipment.totalPillows,
+                Icons.airline_seat_individual_suite,
+              ),
+              _buildEquipmentChip(
+                'ผ้าห้ม',
+                equipment.totalBlankets,
+                Icons.hotel,
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -849,7 +898,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
 
   Widget _buildRepeatVisitorInfo() {
     if (_repeatStats == null) return const SizedBox();
-    
+
     return _buildSection(
       'อัตราการกลับมาเข้าพักซ้ำ',
       Icons.refresh,
@@ -941,9 +990,12 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
                             ),
                             alignment: Alignment.bottomCenter,
                             child: Container(
-                              height: (point.checkins / (_periodSummary!.dailyTrend
-                                  .map((p) => p.checkins)
-                                  .reduce((a, b) => a > b ? a : b))) * 150,
+                              height:
+                                  (point.checkins /
+                                      (_periodSummary!.dailyTrend
+                                          .map((p) => p.checkins)
+                                          .reduce((a, b) => a > b ? a : b))) *
+                                  150,
                               decoration: BoxDecoration(
                                 color: Colors.purple,
                                 borderRadius: BorderRadius.circular(4),
@@ -1013,10 +1065,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: content,
-          ),
+          Padding(padding: const EdgeInsets.all(16), child: content),
         ],
       ),
     );
@@ -1028,9 +1077,8 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
       initialDate: _selectedDate,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      locale: const Locale('th', 'TH'),
     );
-    
+
     if (date != null) {
       setState(() => _selectedDate = date);
       _loadData();
@@ -1040,12 +1088,13 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
   Future<void> _selectCustomDate(bool isStartDate) async {
     final date = await showDatePicker(
       context: context,
-      initialDate: isStartDate ? _customStartDate ?? DateTime.now() : _customEndDate ?? DateTime.now(),
+      initialDate: isStartDate
+          ? _customStartDate ?? DateTime.now()
+          : _customEndDate ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
-      locale: const Locale('th', 'TH'),
     );
-    
+
     if (date != null) {
       setState(() {
         if (isStartDate) {
@@ -1060,7 +1109,9 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
   void _exportReport(String format) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('ส่งออกรายงาน $format - ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป'),
+        content: Text(
+          'ส่งออกรายงาน $format - ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป',
+        ),
       ),
     );
   }
@@ -1072,7 +1123,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
     }
 
     final isSingleDay = _roomSummary!.first.isSingleDay;
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1081,10 +1132,10 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
           // หัวข้อและสถิติรวม
           _buildRoomSummaryHeader(isSingleDay),
           const SizedBox(height: 16),
-          
+
           // ตารางข้อมูลห้องพัก
           _buildRoomTable(isSingleDay),
-          
+
           if (!isSingleDay) ...[
             const SizedBox(height: 16),
             _buildRoomUsageStatistics(),
@@ -1099,11 +1150,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.hotel_outlined,
-            size: 64,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.hotel_outlined, size: 64, color: Colors.grey[400]),
           const SizedBox(height: 16),
           Text(
             'ไม่พบข้อมูลห้องพัก',
@@ -1116,9 +1163,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
           const SizedBox(height: 8),
           Text(
             'กรุณาตรวจสอบการตั้งค่าหรือเพิ่มข้อมูลห้องพัก',
-            style: TextStyle(
-              color: Colors.grey[500],
-            ),
+            style: TextStyle(color: Colors.grey[500]),
             textAlign: TextAlign.center,
           ),
         ],
@@ -1147,7 +1192,14 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
                 Expanded(
                   child: _buildStatCard(
                     'ห้องที่มีผู้เข้าพัก',
-                    _roomSummary!.where((r) => r.dailyStatus == 'มีผู้เข้าพัก' || r.dailyStatus == 'จองแล้ว').length.toString(),
+                    _roomSummary!
+                        .where(
+                          (r) =>
+                              r.dailyStatus == 'มีผู้เข้าพัก' ||
+                              r.dailyStatus == 'จองแล้ว',
+                        )
+                        .length
+                        .toString(),
                     Icons.person,
                     Colors.green,
                   ),
@@ -1156,7 +1208,10 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
                 Expanded(
                   child: _buildStatCard(
                     'ห้องที่มีการใช้งาน',
-                    _roomSummary!.where((r) => r.usageDays > 0).length.toString(),
+                    _roomSummary!
+                        .where((r) => r.usageDays > 0)
+                        .length
+                        .toString(),
                     Icons.check_circle,
                     Colors.green,
                   ),
@@ -1165,8 +1220,11 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
               Expanded(
                 child: _buildStatCard(
                   isSingleDay ? 'ห้องว่าง' : 'อัตราการใช้งานเฉลี่ย',
-                  isSingleDay 
-                      ? _roomSummary!.where((r) => r.dailyStatus == 'ว่าง').length.toString()
+                  isSingleDay
+                      ? _roomSummary!
+                            .where((r) => r.dailyStatus == 'ว่าง')
+                            .length
+                            .toString()
                       : '${_calculateAverageUsage()}%',
                   isSingleDay ? Icons.hotel : Icons.bar_chart,
                   isSingleDay ? Colors.orange : Colors.purple,
@@ -1188,7 +1246,9 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
         child: DataTable(
           headingRowColor: WidgetStateProperty.all(Colors.grey[100]),
           columns: _buildRoomTableColumns(isSingleDay),
-          rows: _roomSummary!.map((summary) => _buildRoomTableRow(summary, isSingleDay)).toList(),
+          rows: _roomSummary!
+              .map((summary) => _buildRoomTableRow(summary, isSingleDay))
+              .toList(),
         ),
       ),
     );
@@ -1207,7 +1267,10 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
           label: Text('สถานะ', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
         DataColumn(
-          label: Text('ผู้เข้าพัก', style: TextStyle(fontWeight: FontWeight.bold)),
+          label: Text(
+            'ผู้เข้าพัก',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       ];
     } else {
@@ -1219,11 +1282,17 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
           label: Text('ขนาด', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
         DataColumn(
-          label: Text('วันที่ใช้งาน', style: TextStyle(fontWeight: FontWeight.bold)),
+          label: Text(
+            'วันที่ใช้งาน',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           numeric: true,
         ),
         DataColumn(
-          label: Text('อัตราการใช้งาน', style: TextStyle(fontWeight: FontWeight.bold)),
+          label: Text(
+            'อัตราการใช้งาน',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       ];
     }
@@ -1232,7 +1301,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
   DataRow _buildRoomTableRow(RoomUsageSummary summary, bool isSingleDay) {
     if (isSingleDay) {
       final statusColor = _getRoomStatusColor(summary.dailyStatus);
-      
+
       return DataRow(
         cells: [
           DataCell(
@@ -1273,8 +1342,10 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
     } else {
       final dateRange = _getDateRange();
       final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
-      final usagePercentage = totalDays > 0 ? (summary.usageDays / totalDays * 100).round() : 0;
-      
+      final usagePercentage = totalDays > 0
+          ? (summary.usageDays / totalDays * 100).round()
+          : 0;
+
       return DataRow(
         cells: [
           DataCell(
@@ -1289,7 +1360,9 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
               '${summary.usageDays} วัน',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: summary.usageDays > 0 ? Colors.green[700] : Colors.grey[600],
+                color: summary.usageDays > 0
+                    ? Colors.green[700]
+                    : Colors.grey[600],
               ),
             ),
           ),
@@ -1337,9 +1410,14 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
     final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
     final totalRooms = _roomSummary!.length;
     final occupiedRooms = _roomSummary!.where((s) => s.usageDays > 0).length;
-    final totalUsageDays = _roomSummary!.fold<int>(0, (sum, s) => sum + s.usageDays);
-    final averageUsage = totalRooms > 0 ? (totalUsageDays / (totalRooms * totalDays) * 100).round() : 0;
-    
+    final totalUsageDays = _roomSummary!.fold<int>(
+      0,
+      (sum, s) => sum + s.usageDays,
+    );
+    final averageUsage = totalRooms > 0
+        ? (totalUsageDays / (totalRooms * totalDays) * 100).round()
+        : 0;
+
     return _buildSection(
       'สถิติการใช้งาน',
       Icons.bar_chart,
@@ -1418,14 +1496,17 @@ class _DailySummaryScreenState extends State<DailySummaryScreen> with TickerProv
 
   int _calculateAverageUsage() {
     if (_roomSummary == null || _roomSummary!.isEmpty) return 0;
-    
+
     final dateRange = _getDateRange();
     final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
     final totalRooms = _roomSummary!.length;
-    final totalUsageDays = _roomSummary!.fold<int>(0, (sum, s) => sum + s.usageDays);
-    
-    return totalRooms > 0 && totalDays > 0 
-        ? (totalUsageDays / (totalRooms * totalDays) * 100).round() 
+    final totalUsageDays = _roomSummary!.fold<int>(
+      0,
+      (sum, s) => sum + s.usageDays,
+    );
+
+    return totalRooms > 0 && totalDays > 0
+        ? (totalUsageDays / (totalRooms * totalDays) * 100).round()
         : 0;
   }
 }

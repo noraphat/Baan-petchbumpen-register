@@ -28,6 +28,103 @@ class BookingService {
   /// Getter สำหรับเข้าถึง DbHelper
   DbHelper get dbHelper => _dbHelper;
 
+  /// อัพเดตวันที่เข้าและออกของการจองห้องพัก (ไม่กระทบ reg_additional_info)
+  /// Returns BookingValidationResult instead of bool for better error handling
+  Future<BookingValidationResult> updateRoomBookingDatesWithValidation({
+    required int bookingId,
+    required DateTime newCheckInDate,
+    required DateTime newCheckOutDate,
+    required String visitorId,
+  }) async {
+    try {
+      debugPrint('🔧 อัพเดตการจองห้องพัก ID: $bookingId');
+      debugPrint(
+        '   วันที่เข้าใหม่: ${DateFormat('yyyy-MM-dd').format(newCheckInDate)}',
+      );
+      debugPrint(
+        '   วันที่ออกใหม่: ${DateFormat('yyyy-MM-dd').format(newCheckOutDate)}',
+      );
+
+      // ตรวจสอบว่าอยู่ในช่วงเวลาปฏิบัติธรรม
+      final practiceInfo = await getPracticePeriod(visitorId);
+      if (practiceInfo == null || practiceInfo.startDate == null || practiceInfo.endDate == null) {
+        return BookingValidationResult.error('ไม่พบข้อมูลช่วงเวลาปฏิบัติธรรม');
+      }
+
+      final practiceStart = DateTime(practiceInfo.startDate!.year, practiceInfo.startDate!.month, practiceInfo.startDate!.day);
+      final practiceEnd = DateTime(practiceInfo.endDate!.year, practiceInfo.endDate!.month, practiceInfo.endDate!.day);
+      final bookingStart = DateTime(newCheckInDate.year, newCheckInDate.month, newCheckInDate.day);
+      final bookingEnd = DateTime(newCheckOutDate.year, newCheckOutDate.month, newCheckOutDate.day);
+
+      if (bookingStart.isBefore(practiceStart) || bookingEnd.isAfter(practiceEnd)) {
+        return BookingValidationResult.error(
+          'วันที่จองต้องอยู่ในช่วงเวลาปฏิบัติธรรม\n'
+          '(${DateFormat('dd/MM/yyyy').format(practiceStart)} - ${DateFormat('dd/MM/yyyy').format(practiceEnd)})'
+        );
+      }
+
+      // ตรวจสอบการขัดแย้งในห้องเดียวกัน
+      final db = await _dbHelper.db;
+      final bookingResult = await db.query(
+        'room_bookings',
+        where: 'id = ?',
+        whereArgs: [bookingId],
+      );
+
+      if (bookingResult.isEmpty) {
+        return BookingValidationResult.error('ไม่พบข้อมูลการจอง');
+      }
+
+      final roomId = bookingResult.first['room_id'] as int;
+      final hasConflict = await hasBookingConflict(
+        roomId: roomId,
+        startDate: newCheckInDate,
+        endDate: newCheckOutDate,
+        excludeBookingId: bookingId,
+      );
+
+      if (hasConflict) {
+        return BookingValidationResult.error('มีการจองอื่นขัดแย้งในช่วงเวลาที่เลือก');
+      }
+
+      final newCheckInStr = DateFormat('yyyy-MM-dd').format(newCheckInDate);
+      final newCheckOutStr = DateFormat('yyyy-MM-dd').format(newCheckOutDate);
+
+      // อัพเดต room_bookings table
+      await db.update(
+        'room_bookings',
+        {
+          'check_in_date': newCheckInStr,
+          'check_out_date': newCheckOutStr,
+        },
+        where: 'id = ?',
+        whereArgs: [bookingId],
+      );
+
+      debugPrint('✅ อัพเดต room_bookings สำเร็จ');
+      return BookingValidationResult.success();
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการอัพเดตการจองห้องพัก: $e');
+      return BookingValidationResult.error('เกิดข้อผิดพลาดในการอัพเดต: $e');
+    }
+  }
+
+  /// Legacy method for backward compatibility
+  Future<bool> updateRoomBookingDates({
+    required int bookingId,
+    required DateTime newCheckInDate,
+    required DateTime newCheckOutDate,
+    required String visitorId,
+  }) async {
+    final result = await updateRoomBookingDatesWithValidation(
+      bookingId: bookingId,
+      newCheckInDate: newCheckInDate,
+      newCheckOutDate: newCheckOutDate,
+      visitorId: visitorId,
+    );
+    return result.isValid;
+  }
+
   /// อัพเดตวันที่ออกของการจองห้องพัก (ไม่กระทบ reg_additional_info)
   Future<bool> updateRoomBookingCheckOut({
     required int bookingId,
@@ -356,21 +453,11 @@ class BookingService {
         '   วันปัจจุบัน: ${DateFormat('yyyy-MM-dd').format(todayOnly)}',
       );
 
-      // ตรวจสอบว่าวันที่เข้าเป็นวันในอดีตหรือไม่
-      if (checkInDate.isBefore(todayOnly)) {
-        debugPrint('❌ ห้ามยกเลิก - เริ่มเข้าพักมาแล้ว');
+      // ตรวจสอบว่าผู้ปฏิบัติธรรมเข้าพักมาแล้วหรือไม่ (today >= check_in_date)
+      if (todayOnly.isAfter(checkInDate) || todayOnly.isAtSameMomentAs(checkInDate)) {
+        debugPrint('❌ ห้ามยกเลิก - มีประวัติการเข้าพักแล้ว');
         return BookingValidationResult.error(
-          'ไม่สามารถยกเลิกการจองได้ เนื่องจากเริ่มเข้าพักมาแล้ว\n'
-          'กรุณาใช้ "ปรับปรุงวันที่เข้าพัก" แทน',
-        );
-      }
-
-      // ตรวจสอบว่าวันที่เข้าเป็นวันปัจจุบันหรือไม่
-      if (checkInDate.isAtSameMomentAs(todayOnly)) {
-        debugPrint('❌ ห้ามยกเลิก - เริ่มเข้าพักวันนี้แล้ว');
-        return BookingValidationResult.error(
-          'ไม่สามารถยกเลิกการจองได้ เนื่องจากเริ่มเข้าพักวันนี้แล้ว\n'
-          'กรุณาใช้ "ปรับปรุงวันที่เข้าพัก" แทน',
+          'ไม่สามารถยกเลิกห้องพักได้ เนื่องจากมีประวัติการเข้าพักแล้ว กรุณาใช้เมนู "ปรับปรุงวันที่เข้าพัก" แทน',
         );
       }
 

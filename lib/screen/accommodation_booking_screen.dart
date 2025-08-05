@@ -412,7 +412,6 @@ class _AccommodationBookingScreenState
                         initialDate: initialDate,
                         firstDate: adjustedFirstDate,
                         lastDate: lastAvailableDate,
-                        locale: const Locale('th'),
                       );
                       debugPrint('📅 เลือกวันที่: $picked');
                       if (picked != null) {
@@ -1678,7 +1677,6 @@ class _AccommodationBookingScreenState
                           firstDate: firstDate,
                           lastDate: lastDate,
                           initialDateRange: selectedRange ?? initialRange,
-                          locale: const Locale('th'),
                           builder: (context, child) {
                             return Theme(
                               data: Theme.of(context).copyWith(

@@ -147,14 +147,14 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
         children: [
           // ส่วนเลือกช่วงเวลา
           _buildPeriodSelector(),
-          
+
           // ส่วนแสดงข้อมูลสรุป
           Expanded(
             child: _isLoading
                 ? Center(child: CircularProgressIndicator())
                 : _summaryData.isEmpty
-                    ? _buildEmptyState()
-                    : _buildSummaryTable(),
+                ? _buildEmptyState()
+                : _buildSummaryTable(),
           ),
         ],
       ),
@@ -165,7 +165,7 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
   Widget _buildPeriodSelector() {
     final dateRange = _getDateRange();
     final isCustom = _selectedPeriod == 'กำหนดช่วงเอง';
-    
+
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -191,7 +191,7 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
             ),
           ),
           SizedBox(height: 12),
-          
+
           // Dropdown สำหรับเลือกช่วงเวลา
           Container(
             width: double.infinity,
@@ -206,18 +206,23 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
                   setState(() {
                     _selectedPeriod = newValue!;
                   });
-                  
+
                   if (newValue == 'กำหนดช่วงเอง') {
                     await _showCustomDatePicker();
                   } else {
                     await _loadData();
                   }
                 },
-                items: _periodOptions.map<DropdownMenuItem<String>>((String value) {
+                items: _periodOptions.map<DropdownMenuItem<String>>((
+                  String value,
+                ) {
                   return DropdownMenuItem<String>(
                     value: value,
                     child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       child: Text(value),
                     ),
                   );
@@ -226,9 +231,9 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
               ),
             ),
           ),
-          
+
           SizedBox(height: 12),
-          
+
           // แสดงช่วงเวลาที่เลือก
           Container(
             padding: EdgeInsets.all(12),
@@ -246,10 +251,7 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
                     isCustom && _isCustomPeriod
                         ? 'ช่วงเวลา: ${DateFormat('dd/MM/yyyy').format(dateRange.start)} - ${DateFormat('dd/MM/yyyy').format(dateRange.end)}'
                         : 'ช่วงเวลา: ${DateFormat('dd/MM/yyyy').format(dateRange.start)} - ${DateFormat('dd/MM/yyyy').format(dateRange.end)}',
-                    style: TextStyle(
-                      color: Colors.blue[800],
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.blue[800], fontSize: 14),
                   ),
                 ),
                 if (isCustom)
@@ -267,8 +269,9 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
 
   /// สร้างตารางแสดงข้อมูลสรุป
   Widget _buildSummaryTable() {
-    final isSingleDay = _summaryData.isNotEmpty && _summaryData.first.isSingleDay;
-    
+    final isSingleDay =
+        _summaryData.isNotEmpty && _summaryData.first.isSingleDay;
+
     return SingleChildScrollView(
       padding: EdgeInsets.all(16),
       child: Column(
@@ -290,16 +293,13 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
               Spacer(),
               Text(
                 'ทั้งหมด ${_summaryData.length} ห้อง',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 14,
-                ),
+                style: TextStyle(color: Colors.grey[600], fontSize: 14),
               ),
             ],
           ),
-          
+
           SizedBox(height: 16),
-          
+
           // ตาราง
           Container(
             decoration: BoxDecoration(
@@ -321,16 +321,15 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
                 child: DataTable(
                   headingRowColor: MaterialStateProperty.all(Colors.grey[100]),
                   columns: _buildTableColumns(isSingleDay),
-                  rows: _summaryData.map((summary) => _buildTableRow(summary, isSingleDay)).toList(),
+                  rows: _summaryData
+                      .map((summary) => _buildTableRow(summary, isSingleDay))
+                      .toList(),
                 ),
               ),
             ),
           ),
-          
-          if (!isSingleDay) ...[
-            SizedBox(height: 16),
-            _buildUsageStatistics(),
-          ],
+
+          if (!isSingleDay) ...[SizedBox(height: 16), _buildUsageStatistics()],
         ],
       ),
     );
@@ -350,7 +349,10 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
           label: Text('สถานะ', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
         DataColumn(
-          label: Text('ผู้เข้าพัก', style: TextStyle(fontWeight: FontWeight.bold)),
+          label: Text(
+            'ผู้เข้าพัก',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       ];
     } else {
@@ -362,11 +364,17 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
           label: Text('ขนาด', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
         DataColumn(
-          label: Text('วันที่ใช้งาน', style: TextStyle(fontWeight: FontWeight.bold)),
+          label: Text(
+            'วันที่ใช้งาน',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
           numeric: true,
         ),
         DataColumn(
-          label: Text('อัตราการใช้งาน', style: TextStyle(fontWeight: FontWeight.bold)),
+          label: Text(
+            'อัตราการใช้งาน',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       ];
     }
@@ -376,7 +384,7 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
   DataRow _buildTableRow(RoomUsageSummary summary, bool isSingleDay) {
     if (isSingleDay) {
       Color statusColor = _getStatusColor(summary.dailyStatus);
-      
+
       return DataRow(
         cells: [
           DataCell(
@@ -417,8 +425,10 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
     } else {
       final dateRange = _getDateRange();
       final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
-      final usagePercentage = totalDays > 0 ? (summary.usageDays / totalDays * 100).round() : 0;
-      
+      final usagePercentage = totalDays > 0
+          ? (summary.usageDays / totalDays * 100).round()
+          : 0;
+
       return DataRow(
         cells: [
           DataCell(
@@ -433,7 +443,9 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
               '${summary.usageDays} วัน',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: summary.usageDays > 0 ? Colors.green[700] : Colors.grey[600],
+                color: summary.usageDays > 0
+                    ? Colors.green[700]
+                    : Colors.grey[600],
               ),
             ),
           ),
@@ -482,9 +494,14 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
     final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
     final totalRooms = _summaryData.length;
     final occupiedRooms = _summaryData.where((s) => s.usageDays > 0).length;
-    final totalUsageDays = _summaryData.fold<int>(0, (sum, s) => sum + s.usageDays);
-    final averageUsage = totalRooms > 0 ? (totalUsageDays / (totalRooms * totalDays) * 100).round() : 0;
-    
+    final totalUsageDays = _summaryData.fold<int>(
+      0,
+      (sum, s) => sum + s.usageDays,
+    );
+    final averageUsage = totalRooms > 0
+        ? (totalUsageDays / (totalRooms * totalDays) * 100).round()
+        : 0;
+
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -555,10 +572,7 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
         children: [
           Text(
             title,
-            style: TextStyle(
-              fontSize: 12,
-              color: color.withOpacity(0.8),
-            ),
+            style: TextStyle(fontSize: 12, color: color.withOpacity(0.8)),
           ),
           SizedBox(height: 4),
           Text(
@@ -580,11 +594,7 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.hotel_outlined,
-            size: 64,
-            color: Colors.grey[400],
-          ),
+          Icon(Icons.hotel_outlined, size: 64, color: Colors.grey[400]),
           SizedBox(height: 16),
           Text(
             'ไม่พบข้อมูลห้องพัก',
@@ -597,9 +607,7 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
           SizedBox(height: 8),
           Text(
             'กรุณาตรวจสอบการตั้งค่าหรือเพิ่มข้อมูลห้องพัก',
-            style: TextStyle(
-              color: Colors.grey[500],
-            ),
+            style: TextStyle(color: Colors.grey[500]),
             textAlign: TextAlign.center,
           ),
         ],

@@ -483,5 +483,265 @@ void main() {
 
       expect(fullAddress, equals(''));
     });
+
+    test('should handle empty additional address', () {
+      final addressInfo = AddressInfo(
+        provinceId: 1,
+        districtId: 101,
+        subDistrictId: 1001,
+        additionalAddress: '',
+      );
+
+      final fullAddress = addressInfo.toFullAddress(mockAddressService);
+
+      expect(fullAddress, equals('กรุงเทพมหานคร, เขตบางรัก, แขวงสีลม'));
+    });
+
+    test('should handle null additional address', () {
+      final addressInfo = AddressInfo(
+        provinceId: 1,
+        districtId: 101,
+        subDistrictId: 1001,
+        additionalAddress: null,
+      );
+
+      final fullAddress = addressInfo.toFullAddress(mockAddressService);
+
+      expect(fullAddress, equals('กรุงเทพมหานคร, เขตบางรัก, แขวงสีลม'));
+    });
+
+    test('should handle malformed address string', () {
+      const malformedAddress = 'กรุงเทพมหานคร';
+      
+      final addressInfo = AddressInfo.fromFullAddress(malformedAddress, mockAddressService);
+
+      expect(addressInfo.provinceId, isNull);
+      expect(addressInfo.districtId, isNull);
+      expect(addressInfo.subDistrictId, isNull);
+      expect(addressInfo.additionalAddress, isNull);
+    });
+
+    test('should handle address with extra parts', () {
+      const addressWithExtra = 'กรุงเทพมหานคร, เขตบางรัก, แขวงสีลม, บ้านเลขที่ 123, ซอย 5, แขวงพญาไท';
+      
+      final addressInfo = AddressInfo.fromFullAddress(addressWithExtra, mockAddressService);
+
+      expect(addressInfo.provinceId, equals(1));
+      expect(addressInfo.districtId, equals(101));
+      expect(addressInfo.subDistrictId, equals(1001));
+      expect(addressInfo.additionalAddress, equals('บ้านเลขที่ 123, ซอย 5, แขวงพญาไท'));
+    });
+  });
+
+  group('RegData Edge Cases', () {
+    test('should handle very long text fields', () {
+      final longText = 'ก' * 1000;
+      final regData = RegData.manual(
+        id: '0123456789',
+        first: longText,
+        last: longText,
+        dob: '1 มกราคม 2500',
+        phone: '0123456789',
+        addr: longText,
+        gender: 'อื่น ๆ',
+      );
+
+      expect(regData.first, equals(longText));
+      expect(regData.last, equals(longText));
+      expect(regData.addr, equals(longText));
+    });
+
+    test('should handle special characters in fields', () {
+      final regData = RegData.fromIdCard(
+        id: '1234567890123',
+        first: 'สมชาย@#\$%',
+        last: 'ใจดี!@#',
+        dob: '15 มกราคม 2530 (พ.ศ.)',
+        addr: 'กรุงเทพฯ, เขต...แขวง***',
+        gender: 'ชาย/หญิง',
+        phone: '081-234-5678',
+      );
+
+      expect(regData.first, equals('สมชาย@#\$%'));
+      expect(regData.last, equals('ใจดี!@#'));
+      expect(regData.dob, equals('15 มกราคม 2530 (พ.ศ.)'));
+      expect(regData.addr, equals('กรุงเทพฯ, เขต...แขวง***'));
+      expect(regData.gender, equals('ชาย/หญิง'));
+      expect(regData.phone, equals('081-234-5678'));
+    });
+
+    test('should handle empty string fields in fromMap', () {
+      final map = {
+        'id': '1234567890123',
+        'first': '',
+        'last': '',
+        'dob': '',
+        'phone': '',
+        'addr': '',
+        'gender': '',
+        'hasIdCard': 1,
+        'status': '',
+        'createdAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+
+      final regData = RegData.fromMap(map);
+
+      expect(regData.first, equals(''));
+      expect(regData.last, equals(''));
+      expect(regData.dob, equals(''));
+      expect(regData.phone, equals(''));
+      expect(regData.addr, equals(''));
+      expect(regData.gender, equals('อื่น ๆ')); // Should fallback to default
+      expect(regData.status, equals('A')); // Should fallback to default
+    });
+
+    test('should maintain data integrity through multiple copy operations', () {
+      final originalData = RegData.fromIdCard(
+        id: '1234567890123',
+        first: 'สมชาย',
+        last: 'ใจดี',
+        dob: '15 มกราคม 2530',
+        addr: 'กรุงเทพมหานคร',
+        gender: 'ชาย',
+        phone: '0812345678',
+      );
+
+      final firstCopy = originalData.copyWithEditable(phone: '0823456789');
+      final secondCopy = firstCopy.copyWithEditable(phone: '0834567890');
+      final thirdCopy = secondCopy.copyWithEditable(phone: '0845678901');
+
+      expect(thirdCopy.phone, equals('0845678901'));
+      expect(thirdCopy.id, equals(originalData.id));
+      expect(thirdCopy.first, equals(originalData.first));
+      expect(thirdCopy.last, equals(originalData.last));
+      expect(thirdCopy.dob, equals(originalData.dob));
+      expect(thirdCopy.addr, equals(originalData.addr));
+      expect(thirdCopy.gender, equals(originalData.gender));
+      expect(thirdCopy.hasIdCard, equals(originalData.hasIdCard));
+      expect(thirdCopy.createdAt, equals(originalData.createdAt));
+      expect(thirdCopy.updatedAt.isAfter(originalData.updatedAt), isTrue);
+    });
+  });
+
+  group('RegAdditionalInfo Edge Cases', () {
+    test('should handle visit ID generation with same timestamp', () {
+      final regId = '1234567890123';
+      
+      // Create multiple additional info quickly to test unique ID generation
+      final info1 = RegAdditionalInfo.create(regId: regId);
+      final info2 = RegAdditionalInfo.create(regId: regId);
+      final info3 = RegAdditionalInfo.create(regId: regId);
+
+      expect(info1.visitId, isNot(equals(info2.visitId)));
+      expect(info2.visitId, isNot(equals(info3.visitId)));
+      expect(info1.visitId, isNot(equals(info3.visitId)));
+      
+      // All should start with regId
+      expect(info1.visitId.startsWith(regId), isTrue);
+      expect(info2.visitId.startsWith(regId), isTrue);
+      expect(info3.visitId.startsWith(regId), isTrue);
+    });
+
+    test('should handle custom visit ID', () {
+      const customVisitId = 'CUSTOM_VISIT_123';
+      final info = RegAdditionalInfo.create(
+        regId: '1234567890123',
+        visitId: customVisitId,
+      );
+
+      expect(info.visitId, equals(customVisitId));
+    });
+
+    test('should handle maximum values for count fields', () {
+      final info = RegAdditionalInfo.create(
+        regId: '1234567890123',
+        shirtCount: 999999,
+        pantsCount: 999999,
+        matCount: 999999,
+        pillowCount: 999999,
+        blanketCount: 999999,
+        childrenCount: 999999,
+      );
+
+      expect(info.shirtCount, equals(999999));
+      expect(info.pantsCount, equals(999999));
+      expect(info.matCount, equals(999999));
+      expect(info.pillowCount, equals(999999));
+      expect(info.blanketCount, equals(999999));
+      expect(info.childrenCount, equals(999999));
+    });
+
+    test('should handle zero values for count fields', () {
+      final info = RegAdditionalInfo.create(
+        regId: '1234567890123',
+        shirtCount: 0,
+        pantsCount: 0,
+        matCount: 0,
+        pillowCount: 0,
+        blanketCount: 0,
+        childrenCount: 0,
+      );
+
+      expect(info.shirtCount, equals(0));
+      expect(info.pantsCount, equals(0));
+      expect(info.matCount, equals(0));
+      expect(info.pillowCount, equals(0));
+      expect(info.blanketCount, equals(0));
+      expect(info.childrenCount, equals(0));
+    });
+
+    test('should handle date edge cases', () {
+      final startDate = DateTime(1900, 1, 1);
+      final endDate = DateTime(2100, 12, 31);
+      
+      final info = RegAdditionalInfo.create(
+        regId: '1234567890123',
+        startDate: startDate,
+        endDate: endDate,
+      );
+
+      expect(info.startDate, equals(startDate));
+      expect(info.endDate, equals(endDate));
+    });
+
+    test('should handle very long text fields', () {
+      final longText = 'ก' * 5000;
+      final info = RegAdditionalInfo.create(
+        regId: '1234567890123',
+        location: longText,
+        notes: longText,
+      );
+
+      expect(info.location, equals(longText));
+      expect(info.notes, equals(longText));
+    });
+
+    test('should maintain backward compatibility with old data', () {
+      final map = {
+        'regId': '1234567890123',
+        // Missing visitId field (old data)
+        'startDate': DateTime(2024, 1, 1).toIso8601String(),
+        'endDate': DateTime(2024, 1, 5).toIso8601String(),
+        'shirtCount': 2,
+        'pantsCount': 2,
+        'matCount': 1,
+        'pillowCount': 1,
+        'blanketCount': 1,
+        'location': 'ศาลาหลัก',
+        'withChildren': 0,
+        'childrenCount': null,
+        'notes': 'ข้อมูลเก่า',
+        'createdAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+
+      final info = RegAdditionalInfo.fromMap(map);
+
+      expect(info.visitId, equals('1234567890123')); // Should fallback to regId
+      expect(info.regId, equals('1234567890123'));
+      expect(info.location, equals('ศาลาหลัก'));
+      expect(info.notes, equals('ข้อมูลเก่า'));
+    });
   });
 }

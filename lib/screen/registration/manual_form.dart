@@ -1035,11 +1035,12 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
   Future<bool> _hasRoomBooking(String regId) async {
     try {
       final db = await DbHelper().db;
-      
+
       final result = await db.query(
         'room_bookings',
         where: 'visitor_id = ? AND status != ?',
         whereArgs: [regId, 'cancelled'],
+        orderBy: 'check_in_date DESC',
         limit: 1,
       );
 
@@ -1050,30 +1051,98 @@ class _AdditionalInfoDialogState extends State<_AdditionalInfoDialog> {
     }
   }
 
-  // ตรวจสอบ validation เพิ่มเติมสำหรับการจองห้อง
+  // ✅ ฟังก์ชันตรวจสอบว่าช่วงวันที่ใหม่ "ครอบคลุม" การจองห้องไว้ครบหรือไม่
+  bool _isBookingOutsideNewStayRange({
+    required DateTime bookingStart,
+    required DateTime bookingEnd,
+    required DateTime newStayStart,
+    required DateTime newStayEnd,
+  }) {
+    // หากการจองเริ่มก่อนหรือสิ้นสุดหลังช่วงใหม่ → แสดงว่าช่วงใหม่ไม่ครอบคลุม
+    debugPrint('📌 bookingStart: $bookingStart, bookingEnd: $bookingEnd');
+    return bookingStart.isBefore(newStayStart) ||
+        bookingEnd.isAfter(newStayEnd);
+  }
+
+  // ✅ ดึงช่วงวันที่ของการจองห้อง
+  Future<DateTimeRange?> _getBookingDateRange(String regId) async {
+    try {
+      final db = await DbHelper().db;
+
+      final result = await db.query(
+        'room_bookings',
+        where: 'visitor_id = ? AND status != ?',
+        whereArgs: [regId, 'cancelled'],
+        orderBy: 'check_in_date ASC',
+      );
+
+      if (result.isEmpty) return null;
+
+      final start = result
+          .map((b) => DateTime.parse(b['check_in_date'] as String))
+          .reduce((a, b) => a.isBefore(b) ? a : b);
+      final end = result
+          .map((b) => DateTime.parse(b['check_out_date'] as String))
+          .reduce((a, b) => a.isAfter(b) ? a : b);
+
+      return DateTimeRange(start: start, end: end);
+    } catch (e) {
+      debugPrint('Error getting booking date range: $e');
+      return null;
+    }
+  }
+
+  // ✅ ตรวจสอบ validation เพิ่มเติมสำหรับการจองห้อง
   Future<String?> _validateDatesWithRoomBooking() async {
-    // เรียก validation พื้นฐานก่อน
+    // ตรวจสอบค่าพื้นฐานก่อน เช่น null หรือ start > end
     final basicValidation = _validateDates();
     if (basicValidation != null) {
       return basicValidation;
     }
 
-    // ตรวจสอบเฉพาะกรณีที่กำลังแก้ไขข้อมูลที่มีอยู่
+    // ตรวจสอบเฉพาะกรณี "แก้ไขข้อมูลเดิม"
     if (!widget.canCreateNew && widget.regId.isNotEmpty) {
       final hasBooking = await _hasRoomBooking(widget.regId);
-      
+
       if (hasBooking) {
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
-        final startDateOnly = DateTime(
+        final newStart = DateTime(
           startDate!.year,
           startDate!.month,
           startDate!.day,
         );
+        final newEnd = DateTime(endDate!.year, endDate!.month, endDate!.day);
 
-        // ห้ามแก้ไขวันที่เริ่มต้นให้ย้อนหลังจากวันปัจจุบัน
-        if (startDateOnly.isBefore(today)) {
+        // ❌ ห้ามแก้ไขวันที่เริ่มต้นย้อนหลังจากวันนี้
+        if (newStart.isBefore(today)) {
           return 'ไม่สามารถแก้ไขวันที่เริ่มต้นย้อนหลังได้ เนื่องจากมีการจองห้องพักแล้ว';
+        }
+
+        // ✅ ตรวจสอบว่าช่วงวันที่ใหม่ "ครอบคลุม" ช่วงจองห้องไว้ทั้งหมด
+        final bookingRange = await _getBookingDateRange(widget.regId);
+        if (bookingRange != null) {
+          final bookingStart = DateTime(
+            bookingRange.start.year,
+            bookingRange.start.month,
+            bookingRange.start.day,
+          );
+          final bookingEnd = DateTime(
+            bookingRange.end.year,
+            bookingRange.end.month,
+            bookingRange.end.day,
+          );
+
+          final isOutside = _isBookingOutsideNewStayRange(
+            bookingStart: bookingStart,
+            bookingEnd: bookingEnd,
+            newStayStart: newStart,
+            newStayEnd: newEnd,
+          );
+
+          if (isOutside) {
+            return 'ไม่สามารถลดช่วงวันปฏิบัติธรรมให้ขัดกับช่วงวันที่จองห้องพักไว้ได้ กรุณาแก้ไขช่วงวันจองห้องพักก่อน';
+          }
         }
       }
     }

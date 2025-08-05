@@ -47,19 +47,38 @@ class BookingService {
 
       // ตรวจสอบว่าอยู่ในช่วงเวลาปฏิบัติธรรม
       final practiceInfo = await getPracticePeriod(visitorId);
-      if (practiceInfo == null || practiceInfo.startDate == null || practiceInfo.endDate == null) {
+      if (practiceInfo == null ||
+          practiceInfo.startDate == null ||
+          practiceInfo.endDate == null) {
         return BookingValidationResult.error('ไม่พบข้อมูลช่วงเวลาปฏิบัติธรรม');
       }
 
-      final practiceStart = DateTime(practiceInfo.startDate!.year, practiceInfo.startDate!.month, practiceInfo.startDate!.day);
-      final practiceEnd = DateTime(practiceInfo.endDate!.year, practiceInfo.endDate!.month, practiceInfo.endDate!.day);
-      final bookingStart = DateTime(newCheckInDate.year, newCheckInDate.month, newCheckInDate.day);
-      final bookingEnd = DateTime(newCheckOutDate.year, newCheckOutDate.month, newCheckOutDate.day);
+      final practiceStart = DateTime(
+        practiceInfo.startDate!.year,
+        practiceInfo.startDate!.month,
+        practiceInfo.startDate!.day,
+      );
+      final practiceEnd = DateTime(
+        practiceInfo.endDate!.year,
+        practiceInfo.endDate!.month,
+        practiceInfo.endDate!.day,
+      );
+      final bookingStart = DateTime(
+        newCheckInDate.year,
+        newCheckInDate.month,
+        newCheckInDate.day,
+      );
+      final bookingEnd = DateTime(
+        newCheckOutDate.year,
+        newCheckOutDate.month,
+        newCheckOutDate.day,
+      );
 
-      if (bookingStart.isBefore(practiceStart) || bookingEnd.isAfter(practiceEnd)) {
+      if (bookingStart.isBefore(practiceStart) ||
+          bookingEnd.isAfter(practiceEnd)) {
         return BookingValidationResult.error(
           'วันที่จองต้องอยู่ในช่วงเวลาปฏิบัติธรรม\n'
-          '(${DateFormat('dd/MM/yyyy').format(practiceStart)} - ${DateFormat('dd/MM/yyyy').format(practiceEnd)})'
+          '(${DateFormat('dd/MM/yyyy').format(practiceStart)} - ${DateFormat('dd/MM/yyyy').format(practiceEnd)})',
         );
       }
 
@@ -84,7 +103,9 @@ class BookingService {
       );
 
       if (hasConflict) {
-        return BookingValidationResult.error('มีการจองอื่นขัดแย้งในช่วงเวลาที่เลือก');
+        return BookingValidationResult.error(
+          'มีการจองอื่นขัดแย้งในช่วงเวลาที่เลือก',
+        );
       }
 
       final newCheckInStr = DateFormat('yyyy-MM-dd').format(newCheckInDate);
@@ -93,10 +114,7 @@ class BookingService {
       // อัพเดต room_bookings table
       await db.update(
         'room_bookings',
-        {
-          'check_in_date': newCheckInStr,
-          'check_out_date': newCheckOutStr,
-        },
+        {'check_in_date': newCheckInStr, 'check_out_date': newCheckOutStr},
         where: 'id = ?',
         whereArgs: [bookingId],
       );
@@ -416,56 +434,50 @@ class BookingService {
     }
   }
 
-  /// ตรวจสอบว่าสามารถยกเลิกการจองได้หรือไม่
-  /// ห้ามยกเลิกหากเริ่มเข้าพักมาแล้วอย่างน้อย 1 วัน
+  /// Check if booking can be cancelled
+  /// Only allows cancellation if today is the same as the check-in date
   Future<BookingValidationResult> canCancelBooking({
     required int bookingId,
     required String visitorId,
   }) async {
     try {
-      final db = await _dbHelper.db;
-
-      // ดึงข้อมูลการจอง
-      final bookingResult = await db.query(
-        'room_bookings',
-        where: 'id = ?',
-        whereArgs: [bookingId],
-      );
-
-      if (bookingResult.isEmpty) {
+      final booking = await getBookingById(bookingId);
+      if (booking == null) {
         return BookingValidationResult.error('ไม่พบข้อมูลการจอง');
       }
 
-      final booking = bookingResult.first;
       final checkInDate = DateTime.parse(booking['check_in_date'] as String);
-      final checkOutDate = DateTime.parse(booking['check_out_date'] as String);
       final today = DateTime.now();
       final todayOnly = DateTime(today.year, today.month, today.day);
-
-      debugPrint('🔍 ตรวจสอบการยกเลิกการจอง:');
-      debugPrint(
-        '   วันที่เข้า: ${DateFormat('yyyy-MM-dd').format(checkInDate)}',
-      );
-      debugPrint(
-        '   วันที่ออก: ${DateFormat('yyyy-MM-dd').format(checkOutDate)}',
-      );
-      debugPrint(
-        '   วันปัจจุบัน: ${DateFormat('yyyy-MM-dd').format(todayOnly)}',
+      final checkInDateOnly = DateTime(
+        checkInDate.year,
+        checkInDate.month,
+        checkInDate.day,
       );
 
-      // ตรวจสอบว่าผู้ปฏิบัติธรรมเข้าพักมาแล้วหรือไม่ (today >= check_in_date)
-      if (todayOnly.isAfter(checkInDate) || todayOnly.isAtSameMomentAs(checkInDate)) {
-        debugPrint('❌ ห้ามยกเลิก - มีประวัติการเข้าพักแล้ว');
+      debugPrint('🔍 ตรวจสอบสิทธิ์ในการยกเลิกการจอง:');
+      debugPrint(
+        '   วันที่เข้าพัก: ${DateFormat('yyyy-MM-dd').format(checkInDateOnly)}',
+      );
+      debugPrint(
+        '   วันที่วันนี้: ${DateFormat('yyyy-MM-dd').format(todayOnly)}',
+      );
+
+      // ✅ อนุญาตให้ยกเลิกได้เฉพาะในวันที่เข้าพักเท่านั้น
+      if (!todayOnly.isAtSameMomentAs(checkInDateOnly)) {
+        debugPrint('❌ ไม่สามารถยกเลิกได้ - อนุญาตเฉพาะในวันที่เข้าพักเท่านั้น');
         return BookingValidationResult.error(
-          'ไม่สามารถยกเลิกห้องพักได้ เนื่องจากมีประวัติการเข้าพักแล้ว กรุณาใช้เมนู "ปรับปรุงวันที่เข้าพัก" แทน',
+          'ไม่สามารถยกเลิกการจองได้ - หากต้องการเปลี่ยนแปลง กรุณาใช้เมนู “ปรับปรุงวันที่เข้าพัก” สำหรับห้องที่มีการเข้าพักเกิน 1 วันแล้ว',
         );
       }
 
-      debugPrint('✅ สามารถยกเลิกการจองได้');
+      debugPrint('✅ อนุญาตให้ยกเลิก - วันนี้ตรงกับวันที่เข้าพัก');
       return BookingValidationResult.success();
     } catch (e) {
       debugPrint('❌ เกิดข้อผิดพลาดในการตรวจสอบการยกเลิก: $e');
-      return BookingValidationResult.error('เกิดข้อผิดพลาดในการตรวจสอบ');
+      return BookingValidationResult.error(
+        'เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์การยกเลิกการจอง',
+      );
     }
   }
 
@@ -531,26 +543,70 @@ class BookingService {
     }
   }
 
-  /// ยกเลิกการจองห้องพัก
+  /// ดึงข้อมูลการจองตาม ID
+  Future<Map<String, dynamic>?> getBookingById(int bookingId) async {
+    try {
+      final db = await _dbHelper.db;
+      final result = await db.query(
+        'room_bookings',
+        where: 'id = ?',
+        whereArgs: [bookingId],
+      );
+
+      if (result.isEmpty) {
+        debugPrint('❌ ไม่พบการจอง ID: $bookingId');
+        return null;
+      }
+
+      return result.first;
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการดึงข้อมูลการจอง: $e');
+      return null;
+    }
+  }
+
+  /// Cancel room booking
+  /// Only allows cancellation if today is the same as the check-in date
   Future<bool> cancelBooking({
     required int bookingId,
     required String visitorId,
   }) async {
     try {
-      // ตรวจสอบว่าสามารถยกเลิกได้หรือไม่
-      final validation = await canCancelBooking(
-        bookingId: bookingId,
-        visitorId: visitorId,
-      );
-
-      if (!validation.isValid) {
-        debugPrint('❌ ไม่สามารถยกเลิกได้: ${validation.errorMessage}');
+      // Get booking data
+      final booking = await getBookingById(bookingId);
+      if (booking == null) {
+        debugPrint('❌ Booking not found with ID: $bookingId');
         return false;
       }
 
+      // Compare today with check-in date (date only, no time)
+      final checkInDate = DateTime.parse(booking['check_in_date'] as String);
+      final today = DateTime.now();
+      final todayOnly = DateTime(today.year, today.month, today.day);
+      final checkInDateOnly = DateTime(
+        checkInDate.year,
+        checkInDate.month,
+        checkInDate.day,
+      );
+
+      debugPrint('🔍 Checking room cancellation:');
+      debugPrint(
+        '   Check-in date: ${DateFormat('yyyy-MM-dd').format(checkInDateOnly)}',
+      );
+      debugPrint('   Today: ${DateFormat('yyyy-MM-dd').format(todayOnly)}');
+
+      // 🛑 Cancellation Rules: Only allow if today equals check-in date
+      if (!todayOnly.isAtSameMomentAs(checkInDateOnly)) {
+        debugPrint('❌ Cannot cancel – allowed only on the check-in date.');
+        return false;
+      }
+
+      // If we reach here, today equals check-in date - cancellation allowed
+      debugPrint('✅ Cancellation allowed – today matches check-in date');
+
       final db = await _dbHelper.db;
 
-      // อัพเดตสถานะเป็น cancelled
+      // Update status to cancelled
       await db.update(
         'room_bookings',
         {'status': 'cancelled'},
@@ -558,10 +614,12 @@ class BookingService {
         whereArgs: [bookingId],
       );
 
-      debugPrint('✅ ยกเลิกการจองสำเร็จ');
+      debugPrint(
+        '✅ Room booking cancelled successfully - booking ID: $bookingId',
+      );
       return true;
     } catch (e) {
-      debugPrint('❌ เกิดข้อผิดพลาดในการยกเลิก: $e');
+      debugPrint('❌ Error cancelling booking: $e');
       return false;
     }
   }
@@ -609,11 +667,14 @@ class BookingService {
     required DateTime endDate,
   }) async {
     try {
-      final iseSingleDay = startDate.isAtSameMomentAs(endDate) || 
-                          endDate.difference(startDate).inDays == 0;
-      
+      final iseSingleDay =
+          startDate.isAtSameMomentAs(endDate) ||
+          endDate.difference(startDate).inDays == 0;
+
       debugPrint('🔍 สรุปการใช้งานห้องพัก');
-      debugPrint('   ช่วงเวลา: ${DateFormat('yyyy-MM-dd').format(startDate)} - ${DateFormat('yyyy-MM-dd').format(endDate)}');
+      debugPrint(
+        '   ช่วงเวลา: ${DateFormat('yyyy-MM-dd').format(startDate)} - ${DateFormat('yyyy-MM-dd').format(endDate)}',
+      );
       debugPrint('   เป็นวันเดียว: $iseSingleDay');
 
       if (iseSingleDay) {
@@ -631,11 +692,12 @@ class BookingService {
   Future<List<RoomUsageSummary>> _getDailyRoomStatus(DateTime date) async {
     final db = await _dbHelper.db;
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
-    
+
     debugPrint('📅 ดึงสถานะห้องพักรายวัน: $dateStr');
 
     // ดึงข้อมูลห้องทั้งหมดพร้อมสถานะการจอง
-    final result = await db.rawQuery('''
+    final result = await db.rawQuery(
+      '''
       SELECT 
         r.id,
         r.name,
@@ -658,20 +720,26 @@ class BookingService {
         AND ? <= rb.check_out_date
       LEFT JOIN regs ON rb.visitor_id = regs.id
       ORDER BY r.name
-    ''', [dateStr, dateStr]);
+    ''',
+      [dateStr, dateStr],
+    );
 
     debugPrint('   พบห้อง ${result.length} ห้อง');
 
-    return result.map((row) => RoomUsageSummary(
-      roomId: row['id'] as int,
-      roomName: row['name'] as String,
-      roomSize: row['size'] as String,
-      capacity: row['capacity'] as int,
-      usageDays: 0, // ไม่ใช้สำหรับรายวัน
-      dailyStatus: row['daily_status'] as String,
-      guestName: row['guest_name'] as String? ?? '',
-      isSingleDay: true,
-    )).toList();
+    return result
+        .map(
+          (row) => RoomUsageSummary(
+            roomId: row['id'] as int,
+            roomName: row['name'] as String,
+            roomSize: row['size'] as String,
+            capacity: row['capacity'] as int,
+            usageDays: 0, // ไม่ใช้สำหรับรายวัน
+            dailyStatus: row['daily_status'] as String,
+            guestName: row['guest_name'] as String? ?? '',
+            isSingleDay: true,
+          ),
+        )
+        .toList();
   }
 
   /// ดึงจำนวนวันที่ใช้งานห้อง (สำหรับหลายวัน)
@@ -682,11 +750,12 @@ class BookingService {
     final db = await _dbHelper.db;
     final startDateStr = DateFormat('yyyy-MM-dd').format(startDate);
     final endDateStr = DateFormat('yyyy-MM-dd').format(endDate);
-    
+
     debugPrint('📊 ดึงจำนวนวันที่ใช้งานห้อง: $startDateStr - $endDateStr');
 
     // คำนวณจำนวนวันที่แต่ละห้องถูกใช้งาน
-    final result = await db.rawQuery('''
+    final result = await db.rawQuery(
+      '''
       SELECT 
         r.id,
         r.name,
@@ -715,21 +784,25 @@ class BookingService {
         GROUP BY rb.room_id
       ) usage_data ON r.id = usage_data.room_id
       ORDER BY r.name
-    ''', [
-      endDateStr, startDateStr, // สำหรับ CASE แรก
-      startDateStr, endDateStr, // สำหรับ CASE สอง  
-      endDateStr, startDateStr, // สำหรับ CASE สาม
-      startDateStr, endDateStr  // สำหรับ WHERE clause
-    ]);
+    ''',
+      [
+        endDateStr, startDateStr, // สำหรับ CASE แรก
+        startDateStr, endDateStr, // สำหรับ CASE สอง
+        endDateStr, startDateStr, // สำหรับ CASE สาม
+        startDateStr, endDateStr, // สำหรับ WHERE clause
+      ],
+    );
 
     debugPrint('   พบห้อง ${result.length} ห้อง');
 
     return result.map((row) {
       final usageDays = (row['usage_days'] as num?)?.toInt() ?? 0;
       final totalBookings = (row['total_bookings'] as num?)?.toInt() ?? 0;
-      
-      debugPrint('   ห้อง ${row['name']}: ${usageDays} วัน (${totalBookings} การจอง)');
-      
+
+      debugPrint(
+        '   ห้อง ${row['name']}: ${usageDays} วัน (${totalBookings} การจอง)',
+      );
+
       return RoomUsageSummary(
         roomId: row['id'] as int,
         roomName: row['name'] as String,

@@ -938,16 +938,28 @@ class _AccommodationBookingScreenState
 
   Future<void> _cancelBooking(Map<String, dynamic> occupantInfo) async {
     try {
-      final db = await _dbHelper.db;
-
-      // ลบข้อมูลการจองจากตาราง room_bookings
-      await db.delete(
-        'room_bookings',
-        where: 'id = ?',
-        whereArgs: [occupantInfo['id']],
+      final bookingService = BookingService();
+      
+      // Use BookingService to properly validate and cancel booking
+      final success = await bookingService.cancelBooking(
+        bookingId: occupantInfo['id'] as int,
+        visitorId: occupantInfo['visitor_id'] as String,
       );
 
-      // อัพเดตข้อมูลใน reg_additional_info เพื่อลบข้อมูลที่พัก (location)
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Cannot cancel booking – allowed only on the check-in date.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // If cancellation succeeded, update reg_additional_info to remove location
+      final db = await _dbHelper.db;
       await db.update(
         'reg_additional_info',
         {'location': null},
@@ -955,7 +967,7 @@ class _AccommodationBookingScreenState
         whereArgs: [occupantInfo['visitor_id']],
       );
 
-      // รีโหลดข้อมูลห้อง
+      // Reload room data
       await _updateRoomStatusForDate(_selectedDate);
 
       if (mounted) {

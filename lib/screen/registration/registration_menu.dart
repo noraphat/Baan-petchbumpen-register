@@ -24,7 +24,7 @@ class RegistrationMenu extends StatelessWidget {
             const SizedBox(height: 24),
             _Option(
               icon: Icons.camera_alt,
-              title: 'ถ่ายรูปบัตรประชาชน',
+              title: 'ลงทะเบียนด้วยบัตรประชาชน',
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const CaptureForm()),

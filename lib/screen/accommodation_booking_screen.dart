@@ -846,7 +846,9 @@ class _AccommodationBookingScreenState
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('ไม่สามารถเปลี่ยนห้องได้'),
+              content: Text(
+                'ไม่สามารถเปลี่ยนห้องได้ เนื่องจากห้องมีการเข้าพักมาแล้วไม่น้อยกว่า 1 วัน:',
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -939,7 +941,7 @@ class _AccommodationBookingScreenState
   Future<void> _cancelBooking(Map<String, dynamic> occupantInfo) async {
     try {
       final bookingService = BookingService();
-      
+
       // Use BookingService to properly validate and cancel booking
       final success = await bookingService.cancelBooking(
         bookingId: occupantInfo['id'] as int,
@@ -950,7 +952,9 @@ class _AccommodationBookingScreenState
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Cannot cancel booking – allowed only on the check-in date.'),
+              content: Text(
+                'ยกเลิกการจองห้องไม่ได้ - อนุญาตให้ยกเลิกได้เฉพาะวันที่เช็คอินเท่านั้น',
+              ),
               backgroundColor: Colors.red,
             ),
           );

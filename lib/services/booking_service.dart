@@ -483,6 +483,7 @@ class BookingService {
 
   /// ตรวจสอบว่าสามารถเปลี่ยนห้องได้หรือไม่
   /// ต้องตรวจสอบว่าห้องปลายทางว่างครบทุกวันในช่วงที่จะย้าย
+  /// และตรวจสอบว่าสามารถย้ายได้เฉพาะวันแรกของการเข้าพักเท่านั้น
   Future<BookingValidationResult> canTransferRoom({
     required int currentBookingId,
     required int targetRoomId,
@@ -505,6 +506,21 @@ class BookingService {
       final booking = bookingResult.first;
       final checkInDate = DateTime.parse(booking['check_in_date'] as String);
       final checkOutDate = DateTime.parse(booking['check_out_date'] as String);
+
+      // ตรวจสอบว่าสามารถย้ายได้เฉพาะวันแรกของการเข้าพักเท่านั้น
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final checkInDateOnly = DateTime(
+        checkInDate.year,
+        checkInDate.month,
+        checkInDate.day,
+      );
+
+      if (today.isAfter(checkInDateOnly)) {
+        return BookingValidationResult.error(
+          'ไม่สามารถย้ายห้องในระหว่างการเข้าพักได้',
+        );
+      }
 
       debugPrint('🔍 ตรวจสอบการเปลี่ยนห้อง:');
       debugPrint('   ห้องปลายทาง: $targetRoomId');
@@ -597,12 +613,14 @@ class BookingService {
 
       // 🛑 Cancellation Rules: Only allow if today equals check-in date
       if (!todayOnly.isAtSameMomentAs(checkInDateOnly)) {
-        debugPrint('❌ Cannot cancel – allowed only on the check-in date.');
+        debugPrint(
+          '❌ ยกเลิกการจองห้องไม่ได้ - อนุญาตให้ยกเลิกได้เฉพาะวันที่เช็คอินเท่านั้น',
+        );
         return false;
       }
 
-      // If we reach here, today equals check-in date - cancellation allowed
-      debugPrint('✅ Cancellation allowed – today matches check-in date');
+      // ถ้ามาถึงตรงนี้ แสดงว่าวันนี้ตรงกับวันที่เช็คอิน – ยกเลิกได้
+      debugPrint('✅ ยกเลิกสำเร็จ - เนื่องจากการยกเลิกตรงกับวันที่เช็คอิน');
 
       final db = await _dbHelper.db;
 

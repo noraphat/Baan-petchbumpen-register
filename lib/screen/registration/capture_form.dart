@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:thai_idcard_reader_flutter/thai_idcard_reader_flutter.dart';
 import 'package:intl/intl.dart';
+import '../../models/reg_data.dart';
+import '../../services/registration_service.dart';
+import '../../widgets/registration_dialog.dart';
 
 class CaptureForm extends StatefulWidget {
   const CaptureForm({super.key});
@@ -11,11 +14,15 @@ class CaptureForm extends StatefulWidget {
 }
 
 class _CaptureFormState extends State<CaptureForm> {
+  final RegistrationService _registrationService = RegistrationService();
+  
   ThaiIDCard? _data;
   UsbDevice? _device;
   dynamic _card;
   String? _error;
   bool _isReading = false;
+  bool _isProcessing = false;
+  RegData? _currentRegistration;
 
   @override
   void initState() {
@@ -77,6 +84,10 @@ class _CaptureFormState extends State<CaptureForm> {
         _data = result;
         _error = null;
       });
+      
+      // ประมวลผลข้อมูลบัตรประชาชนตาม Logic ที่กำหนด
+      await _processCardData(result);
+      
     } catch (e) {
       setState(() {
         _error = 'ไม่สามารถอ่านข้อมูลจากบัตรประชาชนได้: $e';
@@ -89,6 +100,145 @@ class _CaptureFormState extends State<CaptureForm> {
     }
   }
 
+  /// ประมวลผลข้อมูลบัตรประชาชนตามเงื่อนไข Logic
+  Future<void> _processCardData(ThaiIDCard cardData) async {
+    if (cardData.cid == null) {
+      _showErrorDialog('ไม่พบเลขบัตรประชาชน');
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final id = cardData.cid!;
+      final firstName = cardData.firstnameTH ?? '';
+      final lastName = cardData.lastnameTH ?? '';
+      final dateOfBirth = cardData.birthdate ?? '';
+      final address = cardData.address ?? '';
+      final gender = cardData.gender == 1 ? 'ชาย' : 'หญิง';
+
+      // ตรวจสอบข้อมูลเดิมในฐานข้อมูล
+      final existingReg = await _registrationService.findExistingRegistration(id);
+
+      if (existingReg == null) {
+        // เงื่อนไขที่ 1: มาครั้งแรกพร้อมบัตรประชาชน
+        await _handleFirstTimeWithCard(
+          id: id,
+          firstName: firstName,
+          lastName: lastName,
+          dateOfBirth: dateOfBirth,
+          address: address,
+          gender: gender,
+        );
+      } else if (existingReg.hasIdCard) {
+        // เงื่อนไขที่ 2: มาครั้งที่ 2 ไม่พกบัตร (แต่เคยใช้บัตรแล้ว)
+        await _handleReturningWithCard(existingReg);
+      } else {
+        // เงื่อนไขที่ 4: มาครั้งต่อมาพกบัตรมาครั้งแรก
+        await _handleUpgradeToCard(
+          existingReg: existingReg,
+          id: id,
+          firstName: firstName,
+          lastName: lastName,
+          dateOfBirth: dateOfBirth,
+          address: address,
+          gender: gender,
+        );
+      }
+    } catch (e) {
+      _showErrorDialog('เกิดข้อผิดพลาดในการประมวลผล: $e');
+    } finally {
+      setState(() {
+        _isProcessing = false;
+      });
+    }
+  }
+
+  /// เงื่อนไขที่ 1: มาครั้งแรกพร้อมบัตรประชาชน
+  Future<void> _handleFirstTimeWithCard({
+    required String id,
+    required String firstName,
+    required String lastName,
+    required String dateOfBirth,
+    required String address,
+    required String gender,
+  }) async {
+    final regData = await _registrationService.registerWithIdCard(
+      id: id,
+      first: firstName,
+      last: lastName,
+      dob: dateOfBirth,
+      addr: address,
+      gender: gender,
+      phone: '',
+    );
+
+    if (regData != null) {
+      setState(() {
+        _currentRegistration = regData;
+      });
+
+      _showSuccessMessage('ลงทะเบียนด้วยบัตรประชาชนสำเร็จ');
+      _showRegistrationDialog(regData, isFirstTime: true);
+    } else {
+      _showErrorDialog('ไม่สามารถลงทะเบียนได้');
+    }
+  }
+
+  /// เงื่อนไขที่ 2: มาครั้งที่ 2 ไม่พกบัตร (แต่เคยใช้บัตรแล้ว)
+  Future<void> _handleReturningWithCard(RegData existingReg) async {
+    setState(() {
+      _currentRegistration = existingReg;
+    });
+
+    _showSuccessMessage('พบข้อมูลเดิม - ข้อมูลไม่สามารถแก้ไขได้');
+    _showRegistrationDialog(existingReg, isFirstTime: false);
+  }
+
+  /// เงื่อนไขที่ 4: มาครั้งต่อมาพกบัตรมาครั้งแรก
+  Future<void> _handleUpgradeToCard({
+    required RegData existingReg,
+    required String id,
+    required String firstName,
+    required String lastName,
+    required String dateOfBirth,
+    required String address,
+    required String gender,
+  }) async {
+    final confirmed = await _showUpgradeConfirmDialog(existingReg, {
+      'firstName': firstName,
+      'lastName': lastName,
+      'dateOfBirth': dateOfBirth,
+      'address': address,
+      'gender': gender,
+    });
+
+    if (confirmed == true) {
+      final updatedReg = await _registrationService.upgradeToIdCard(
+        id: id,
+        first: firstName,
+        last: lastName,
+        dob: dateOfBirth,
+        addr: address,
+        gender: gender,
+        phone: existingReg.phone,
+      );
+
+      if (updatedReg != null) {
+        setState(() {
+          _currentRegistration = updatedReg;
+        });
+
+        _showSuccessMessage('อัปเกรดข้อมูลเป็นบัตรประชาชนสำเร็จ');
+        _showRegistrationDialog(updatedReg, isFirstTime: false);
+      } else {
+        _showErrorDialog('ไม่สามารถอัปเกรดข้อมูลได้');
+      }
+    }
+  }
+
   void _clear() {
     setState(() {
       _data = null;
@@ -96,13 +246,14 @@ class _CaptureFormState extends State<CaptureForm> {
     });
   }
 
-  void _showErrorDialog() {
-    if (_error != null) {
+  void _showErrorDialog([String? customMessage]) {
+    final message = customMessage ?? _error;
+    if (message != null) {
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('เกิดข้อผิดพลาด'),
-          content: Text(_error!),
+          content: Text(message),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -112,6 +263,100 @@ class _CaptureFormState extends State<CaptureForm> {
         ),
       );
     }
+  }
+
+  /// แสดงข้อความสำเร็จ
+  void _showSuccessMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// แสดง Dialog ยืนยันการอัปเกรด
+  Future<bool?> _showUpgradeConfirmDialog(
+    RegData existingReg, 
+    Map<String, String> cardData,
+  ) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('อัปเกรดข้อมูลเป็นบัตรประชาชน'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'พบข้อมูลเดิมที่ลงทะเบียนแบบ Manual',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            
+            const Text('ข้อมูลเดิม:'),
+            Text('ชื่อ-นามสกุล: ${existingReg.first} ${existingReg.last}'),
+            Text('วันเกิด: ${existingReg.dob}'),
+            Text('เพศ: ${existingReg.gender}'),
+            const SizedBox(height: 12),
+            
+            const Text('ข้อมูลจากบัตร:'),
+            Text('ชื่อ-นามสกุล: ${cardData['firstName']} ${cardData['lastName']}'),
+            Text('วันเกิด: ${cardData['dateOfBirth']}'),
+            Text('เพศ: ${cardData['gender']}'),
+            const SizedBox(height: 16),
+            
+            const Text(
+              'ต้องการอัปเดตข้อมูลจากบัตรประชาชนหรือไม่?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const Text(
+              '(หลังจากนี้จะไม่สามารถแก้ไขข้อมูลส่วนตัวได้)',
+              style: TextStyle(color: Colors.red, fontSize: 12),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('ยกเลิก'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('อัปเกรด'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// แสดง Dialog การลงทะเบียน
+  void _showRegistrationDialog(RegData regData, {required bool isFirstTime}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => RegistrationDialog(
+        regData: regData,
+        isFirstTime: isFirstTime,
+        onCompleted: (additionalInfo) {
+          Navigator.pop(ctx); // ปิด registration dialog
+          Navigator.pop(context); // กลับไปหน้าเมนู
+          
+          // แสดงข้อความสำเร็จ
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('ลงทะเบียนเสร็จสิ้น'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        },
+      ),
+    );
   }
 
   String _formatDate(String? dateString) {
@@ -180,17 +425,64 @@ class _CaptureFormState extends State<CaptureForm> {
             ],
 
             // Reading indicator
-            if (_isReading) ...[
+            if (_isReading || _isProcessing) ...[
               const SizedBox(height: 16),
-              const Card(
+              Card(
                 child: Padding(
-                  padding: EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(16),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      CircularProgressIndicator(),
-                      SizedBox(width: 16),
-                      Text('กำลังอ่านข้อมูล...', style: TextStyle(fontSize: 16)),
+                      const CircularProgressIndicator(),
+                      const SizedBox(width: 16),
+                      Text(
+                        _isReading ? 'กำลังอ่านข้อมูล...' : 'กำลังประมวลผล...',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+
+            // Registration Status Display
+            if (_currentRegistration != null) ...[
+              const SizedBox(height: 16),
+              Card(
+                color: Colors.green.shade50,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _currentRegistration!.hasIdCard 
+                                ? Icons.verified_user 
+                                : Icons.person,
+                            color: _currentRegistration!.hasIdCard 
+                                ? Colors.green 
+                                : Colors.orange,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'สถานะการลงทะเบียน',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                      Text('ชื่อ-นามสกุล: ${_currentRegistration!.first} ${_currentRegistration!.last}'),
+                      Text('เลขบัตรประชาชน: ${_currentRegistration!.id}'),
+                      Text('สถานะบัตร: ${_currentRegistration!.hasIdCard ? "ใช้บัตรประชาชน" : "ลงทะเบียนแบบ Manual"}'),
+                      Text(
+                        'การแก้ไข: ${_currentRegistration!.hasIdCard ? "ห้ามแก้ไขข้อมูลส่วนตัว" : "สามารถแก้ไขได้"}',
+                        style: TextStyle(
+                          color: _currentRegistration!.hasIdCard ? Colors.red : Colors.green,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_petchbumpen_register/screen/registration/registration_menu.dart';
+import 'package:flutter_petchbumpen_register/screen/registration/manual_form.dart';
+import 'package:flutter_petchbumpen_register/screen/registration/capture_form.dart';
 
 void main() {
   group('RegistrationMenu Unit Tests', () {

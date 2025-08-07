@@ -25,6 +25,7 @@ class _CaptureFormState extends State<CaptureForm> {
   String? _error;
   bool _isReading = false;
   bool _isProcessing = false;
+  bool _isManualReading = false;
   RegData? _currentRegistration;
 
   // Enhanced card reader state
@@ -113,6 +114,116 @@ class _CaptureFormState extends State<CaptureForm> {
         _isReading = false;
       });
     }
+  }
+
+  /// Manual card reading function triggered by button
+  Future<void> _recheckCard() async {
+    if (_isManualReading || _isReading || _isProcessing) return;
+    
+    setState(() {
+      _isManualReading = true;
+      _error = null;
+      _data = null; // Clear previous data
+      _currentRegistration = null; // Clear previous registration
+    });
+
+    try {
+      // Add a small delay to ensure card reader is ready
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      // Try to read the card directly
+      var result = await ThaiIdcardReaderFlutter.read();
+      
+      if (result?.cid != null) {
+        setState(() {
+          _data = result;
+          _error = null;
+        });
+        
+        // Process the card data
+        await _processCardData(result!);
+        
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('อ่านบัตรประชาชนสำเร็จ'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        throw Exception('ไม่พบข้อมูลบัตรประชาชน');
+      }
+      
+    } catch (e) {
+      setState(() {
+        _error = 'ไม่สามารถอ่านบัตรประชาชนได้: $e';
+      });
+      
+      // Show error dialog or snackbar
+      if (mounted) {
+        _showRecheckErrorDialog(e.toString());
+      }
+    } finally {
+      setState(() {
+        _isManualReading = false;
+      });
+    }
+  }
+
+  /// Show error dialog for recheck card failures
+  void _showRecheckErrorDialog(String errorMessage) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 24),
+            const SizedBox(width: 8),
+            const Text('ไม่สามารถอ่านบัตรได้'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('เกิดข้อผิดพลาด: $errorMessage'),
+            const SizedBox(height: 16),
+            const Text(
+              'กรุณาตรวจสอบ:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text('• บัตรประชาชนเสียบอยู่ในเครื่องอ่านบัตร'),
+            const Text('• บัตรไม่ชำรุดหรือสกปรก'),
+            const Text('• เครื่องอ่านบัตรเชื่อมต่ออยู่'),
+            const Text('• ลองถอดและเสียบบัตรใหม่อีกครั้ง'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('ตกลง'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              // Try again after a short delay
+              Future.delayed(const Duration(milliseconds: 500), () {
+                _recheckCard();
+              });
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('ลองอีกครั้ง'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// ประมวลผลข้อมูลบัตรประชาชนตามเงื่อนไข Logic
@@ -391,6 +502,16 @@ class _CaptureFormState extends State<CaptureForm> {
         title: const Text('อ่านบัตรประชาชน'),
         centerTitle: true,
       ),
+      floatingActionButton: _device != null && _device!.hasPermission && !(_isReading || _isProcessing || _isManualReading)
+          ? FloatingActionButton.extended(
+              onPressed: _recheckCard,
+              icon: const Icon(Icons.refresh),
+              label: const Text('ตรวจสอบบัตร'),
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              tooltip: 'ตรวจสอบบัตรประชาชนอีกครั้ง',
+            )
+          : null,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -439,8 +560,44 @@ class _CaptureFormState extends State<CaptureForm> {
               ),
             ],
 
+            // Recheck Card Button
+            if (_device != null && _device!.hasPermission && !(_isReading || _isProcessing || _isManualReading)) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: ElevatedButton.icon(
+                  onPressed: _recheckCard,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text(
+                    'ตรวจสอบบัตรอีกครั้ง',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'หากบัตรเสียบอยู่แล้วแต่ระบบไม่อ่าน กดปุ่มนี้เพื่อลองอ่านอีกครั้ง',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+
             // Reading indicator
-            if (_isReading || _isProcessing) ...[
+            if (_isReading || _isProcessing || _isManualReading) ...[
               const SizedBox(height: 16),
               Card(
                 child: Padding(
@@ -451,7 +608,9 @@ class _CaptureFormState extends State<CaptureForm> {
                       const CircularProgressIndicator(),
                       const SizedBox(width: 16),
                       Text(
-                        _isReading ? 'กำลังอ่านข้อมูล...' : 'กำลังประมวลผล...',
+                        _isManualReading 
+                          ? 'กำลังตรวจสอบบัตร...' 
+                          : (_isReading ? 'กำลังอ่านข้อมูล...' : 'กำลังประมวลผล...'),
                         style: const TextStyle(fontSize: 16),
                       ),
                     ],

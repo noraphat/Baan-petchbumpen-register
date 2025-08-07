@@ -33,18 +33,18 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   }
 
   void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _showDatabaseStatistics() async {
     await _loadStatistics();
-    
+
     if (_statistics == null) return;
 
     if (!mounted) return;
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -121,10 +121,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
                 Text(
                   value,
@@ -145,7 +142,8 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   Future<void> _clearTestData() async {
     final confirmed = await _showConfirmDialog(
       title: 'ล้างข้อมูลทดสอบ',
-      content: 'คุณต้องการลบข้อมูลทดสอบทั้งหมดหรือไม่?\n\n'
+      content:
+          'คุณต้องการลบข้อมูลทดสอบทั้งหมดหรือไม่?\n\n'
           '⚠️ ข้อมูลที่จะถูกลบ:\n'
           '• ชื่อที่มีคำว่า "ทดสอบ"\n'
           '• เบอร์โทรที่ขึ้นต้นด้วย "000"\n'
@@ -158,13 +156,13 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     if (confirmed != true) return;
 
     setState(() => _isLoading = true);
-    
+
     try {
       final deletedCount = await DbHelper().clearTestData();
       setState(() => _isLoading = false);
-      
+
       await _loadStatistics(); // รีเฟรชสถิติ
-      
+
       _showSnackBar('ล้างข้อมูลทดสอบเรียบร้อยแล้ว (ลบ $deletedCount รายการ)');
     } catch (e) {
       setState(() => _isLoading = false);
@@ -175,7 +173,8 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   Future<void> _createTestData() async {
     final confirmed = await _showConfirmDialog(
       title: 'สร้างข้อมูลทดสอบ',
-      content: 'คุณต้องการสร้างข้อมูลทดสอบหรือไม่?\n\n'
+      content:
+          'คุณต้องการสร้างข้อมูลทดสอบหรือไม่?\n\n'
           '📦 ข้อมูลที่จะสร้าง:\n'
           '• ผู้ปฏิบัติธรรม 5 คน\n'
           '• แต่ละคนมีประวัติ 1-3 ครั้ง\n'
@@ -188,13 +187,13 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     if (confirmed != true) return;
 
     setState(() => _isLoading = true);
-    
+
     try {
       await DbHelper().createMultipleTestData();
       setState(() => _isLoading = false);
-      
+
       await _loadStatistics(); // รีเฟรชสถิติ
-      
+
       _showSnackBar('สร้างข้อมูลทดสอบเรียบร้อยแล้ว');
     } catch (e) {
       setState(() => _isLoading = false);
@@ -205,7 +204,8 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   Future<void> _clearAllData() async {
     final firstConfirm = await _showConfirmDialog(
       title: '⚠️ ล้างข้อมูลทั้งหมด',
-      content: 'คุณต้องการลบข้อมูลทั้งหมดในระบบหรือไม่?\n\n'
+      content:
+          'คุณต้องการลบข้อมูลทั้งหมดในระบบหรือไม่?\n\n'
           '🚨 การกระทำนี้จะ:\n'
           '• ลบข้อมูลผู้ปฏิบัติธรรมทั้งหมด\n'
           '• ลบประวัติการเข้าพักทั้งหมด\n'
@@ -221,7 +221,8 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     // ยืนยันครั้งที่ 2
     final secondConfirm = await _showConfirmDialog(
       title: '🚨 ยืนยันอีกครั้ง',
-      content: 'คุณแน่ใจหรือไม่ที่จะลบข้อมูลทั้งหมด?\n\n'
+      content:
+          'คุณแน่ใจหรือไม่ที่จะลบข้อมูลทั้งหมด?\n\n'
           'หลังจากนี้ระบบจะกลับมาเป็นเหมือนเพิ่งติดตั้งใหม่\n\n'
           'กรุณาพิมพ์ "DELETE" เพื่อยืนยัน',
       confirmText: 'ลบทั้งหมด',
@@ -232,14 +233,16 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     if (secondConfirm != true) return;
 
     setState(() => _isLoading = true);
-    
+
     try {
       await DbHelper().clearAllData();
       setState(() => _isLoading = false);
-      
+
       await _loadStatistics(); // รีเฟรชสถิติ
-      
-      _showSnackBar('ล้างข้อมูลทั้งหมดเรียบร้อยแล้ว ระบบพร้อมใช้งานใหม่อีกครั้ง');
+
+      _showSnackBar(
+        'ล้างข้อมูลทั้งหมดเรียบร้อยแล้ว ระบบพร้อมใช้งานใหม่อีกครั้ง',
+      );
     } catch (e) {
       setState(() => _isLoading = false);
       _showSnackBar('เกิดข้อผิดพลาด: $e');
@@ -261,27 +264,29 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: Text(title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(content),
-              if (requireTextConfirmation) ...[
-                const SizedBox(height: 16),
-                TextField(
-                  controller: textController,
-                  decoration: const InputDecoration(
-                    hintText: 'พิมพ์ "DELETE" เพื่อยืนยัน',
-                    border: OutlineInputBorder(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(content),
+                if (requireTextConfirmation) ...[
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: textController,
+                    decoration: const InputDecoration(
+                      hintText: 'พิมพ์ "DELETE" เพื่อยืนยัน',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        isTextValid = value.trim().toUpperCase() == 'DELETE';
+                      });
+                    },
                   ),
-                  onChanged: (value) {
-                    setState(() {
-                      isTextValid = value.trim().toUpperCase() == 'DELETE';
-                    });
-                  },
-                ),
+                ],
               ],
-            ],
+            ),
           ),
           actions: [
             TextButton(
@@ -328,9 +333,9 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
                     color: Colors.blue,
                     onTap: _showDatabaseStatistics,
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // ล้างข้อมูลทดสอบ
                   _buildMenuCard(
                     icon: Icons.cleaning_services,
@@ -339,9 +344,9 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
                     color: Colors.orange,
                     onTap: _clearTestData,
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // สร้างข้อมูลทดสอบ
                   _buildMenuCard(
                     icon: Icons.add_box,
@@ -350,9 +355,9 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
                     color: Colors.green,
                     onTap: _createTestData,
                   ),
-                  
+
                   const SizedBox(height: 16),
-                  
+
                   // ล้างข้อมูลทั้งหมด
                   _buildMenuCard(
                     icon: Icons.delete_forever,
@@ -376,9 +381,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   }) {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
@@ -392,16 +395,13 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
                   color: color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  icon,
-                  color: color,
-                  size: 24,
-                ),
+                child: Icon(icon, color: color, size: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       title,
@@ -411,21 +411,18 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
+                    Flexible(
+                      child: Text(
+                        subtitle,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
                       ),
                     ),
                   ],
                 ),
               ),
-              Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.grey[400],
-                size: 16,
-              ),
+              Icon(Icons.arrow_forward_ios, color: Colors.grey[400], size: 16),
             ],
           ),
         ),

@@ -8,17 +8,19 @@ import '../../services/registration_service.dart';
 import '../../services/enhanced_card_reader_service.dart';
 import '../../widgets/registration_dialog.dart';
 
-class CaptureForm extends StatefulWidget {
-  const CaptureForm({super.key});
+/// Enhanced ID card capture form with automatic detection and processing
+class EnhancedCaptureForm extends StatefulWidget {
+  const EnhancedCaptureForm({super.key});
 
   @override
-  State<CaptureForm> createState() => _CaptureFormState();
+  State<EnhancedCaptureForm> createState() => _EnhancedCaptureFormState();
 }
 
-class _CaptureFormState extends State<CaptureForm> {
+class _EnhancedCaptureFormState extends State<EnhancedCaptureForm> {
   final RegistrationService _registrationService = RegistrationService();
   final EnhancedCardReaderService _enhancedCardReader = EnhancedCardReaderService();
   
+  // Original Thai ID Card Reader components (fallback)
   ThaiIDCard? _data;
   UsbDevice? _device;
   dynamic _card;
@@ -42,17 +44,151 @@ class _CaptureFormState extends State<CaptureForm> {
   @override
   void initState() {
     super.initState();
+    _initializeSystems();
+  }
+
+  @override
+  void dispose() {
+    _cleanupEnhancedReader();
+    super.dispose();
+  }
+
+  /// Initialize both card reader systems
+  Future<void> _initializeSystems() async {
+    // Initialize original Thai ID Card Reader
+    _initializeOriginalReader();
+    
+    // Initialize enhanced card reader
+    await _initializeEnhancedReader();
+  }
+
+  /// Initialize original Thai ID Card Reader (existing system)
+  void _initializeOriginalReader() {
     // Listen to USB device events
     ThaiIdcardReaderFlutter.deviceHandlerStream.listen(_onUSB);
   }
 
+  /// Initialize enhanced card reader system
+  Future<void> _initializeEnhancedReader() async {
+    try {
+      _setupEnhancedReaderListeners();
+      
+      final initialized = await _enhancedCardReader.initialize();
+      if (initialized && _autoDetectionEnabled) {
+        await _enhancedCardReader.startMonitoring();
+        setState(() {
+          _statusMessage = 'ระบบตรวจสอบบัตรอัตโนมัติพร้อมใช้งาน';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _statusMessage = 'ไม่สามารถเริ่มระบบตรวจสอบอัตโนมัติได้: $e';
+      });
+    }
+  }
+
+  /// Setup listeners for enhanced card reader
+  void _setupEnhancedReaderListeners() {
+    _eventSubscription = _enhancedCardReader.eventStream.listen(_handleEnhancedCardEvent);
+    _errorSubscription = _enhancedCardReader.errorStream.listen(_handleEnhancedCardError);
+    _statusSubscription = _enhancedCardReader.statusStream.listen(_handleEnhancedStatusChange);
+  }
+
+  /// Cleanup enhanced card reader
+  void _cleanupEnhancedReader() {
+    _eventSubscription?.cancel();
+    _errorSubscription?.cancel();
+    _statusSubscription?.cancel();
+    _enhancedCardReader.dispose();
+  }
+
+  /// Handle enhanced card reader events
+  void _handleEnhancedCardEvent(CardReaderEvent event) {
+    switch (event.type) {
+      case CardReaderEventType.cardDetected:
+        if (event.cardData != null && !_isProcessing) {
+          _processEnhancedCardData(event.cardData!);
+        }
+        break;
+      case CardReaderEventType.cardRemoved:
+        setState(() {
+          _statusMessage = 'รอการใส่บัตรประชาชน';
+        });
+        break;
+      case CardReaderEventType.error:
+        _showErrorSnackBar('เกิดข้อผิดพลาดในระบบตรวจสอบอัตโนมัติ');
+        break;
+    }
+  }
+
+  /// Handle enhanced card reader errors
+  void _handleEnhancedCardError(String? error) {
+    if (error != null) {
+      _showErrorSnackBar('ระบบตรวจสอบอัตโนมัติ: $error');
+    }
+  }
+
+  /// Handle enhanced card reader status changes
+  void _handleEnhancedStatusChange(CardReaderStatus status) {
+    setState(() {
+      _enhancedStatus = status;
+    });
+  }
+
+  /// Process card data from enhanced reader
+  Future<void> _processEnhancedCardData(IdCardData cardData) async {
+    if (_isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+      _statusMessage = 'กำลังประมวลผลข้อมูลจากระบบอัตโนมัติ...';
+      _lastProcessedCardId = cardData.id;
+      _lastProcessedTime = DateTime.now();
+    });
+
+    try {
+      // Convert enhanced card data to ThaiIDCard format for consistency
+      final mockThaiIDCard = _createMockThaiIDCard(cardData);
+      
+      // Process using existing logic
+      await _processCardData(mockThaiIDCard);
+    } catch (e) {
+      _showErrorDialog('ข้อผิดพลาด', 'ไม่สามารถประมวลผลข้อมูลอัตโนมัติได้: $e');
+    } finally {
+      setState(() {
+        _isProcessing = false;
+      });
+    }
+  }
+
+  /// Create mock ThaiIDCard from enhanced card data for compatibility
+  ThaiIDCard _createMockThaiIDCard(IdCardData cardData) {
+    // This is a simplified conversion - in real implementation,
+    // you would properly map all fields from IdCardData to ThaiIDCard
+    return ThaiIDCard(
+      cid: cardData.id,
+      titleTH: cardData.title,
+      firstnameTH: cardData.firstName,
+      lastnameTH: cardData.lastName,
+      birthdate: cardData.dateOfBirth,
+      gender: cardData.gender == 'ชาย' ? 1 : 2,
+      address: cardData.address,
+      photo: [], // Enhanced reader might not have photo
+      issueDate: null,
+      expireDate: null,
+      titleEN: null,
+      firstnameEN: null,
+      lastnameEN: null,
+    );
+  }
+
+  // === ORIGINAL THAI ID CARD READER METHODS (preserved) ===
+
   void _onUSB(usbEvent) {
     try {
       if (usbEvent.hasPermission) {
-        // Listen to card events when device has permission
         ThaiIdcardReaderFlutter.cardHandlerStream.listen(_onData);
       } else {
-        // Clear data when no permission
         _clear();
       }
       setState(() {
@@ -100,7 +236,6 @@ class _CaptureFormState extends State<CaptureForm> {
         _error = null;
       });
       
-      // ประมวลผลข้อมูลบัตรประชาชนตาม Logic ที่กำหนด
       await _processCardData(result);
       
     } catch (e) {
@@ -115,7 +250,7 @@ class _CaptureFormState extends State<CaptureForm> {
     }
   }
 
-  /// ประมวลผลข้อมูลบัตรประชาชนตามเงื่อนไข Logic
+  /// Process card data using existing logic (works with both systems)
   Future<void> _processCardData(ThaiIDCard cardData) async {
     if (cardData.cid == null) {
       _showErrorDialog('ไม่พบเลขบัตรประชาชน');
@@ -134,11 +269,9 @@ class _CaptureFormState extends State<CaptureForm> {
       final address = cardData.address ?? '';
       final gender = cardData.gender == 1 ? 'ชาย' : 'หญิง';
 
-      // ตรวจสอบข้อมูลเดิมในฐานข้อมูล
       final existingReg = await _registrationService.findExistingRegistration(id);
 
       if (existingReg == null) {
-        // เงื่อนไขที่ 1: มาครั้งแรกพร้อมบัตรประชาชน
         await _handleFirstTimeWithCard(
           id: id,
           firstName: firstName,
@@ -148,10 +281,8 @@ class _CaptureFormState extends State<CaptureForm> {
           gender: gender,
         );
       } else if (existingReg.hasIdCard) {
-        // เงื่อนไขที่ 2: มาครั้งที่ 2 ไม่พกบัตร (แต่เคยใช้บัตรแล้ว)
         await _handleReturningWithCard(existingReg);
       } else {
-        // เงื่อนไขที่ 4: มาครั้งต่อมาพกบัตรมาครั้งแรก
         await _handleUpgradeToCard(
           existingReg: existingReg,
           id: id,
@@ -171,7 +302,8 @@ class _CaptureFormState extends State<CaptureForm> {
     }
   }
 
-  /// เงื่อนไขที่ 1: มาครั้งแรกพร้อมบัตรประชาชน
+  // === REGISTRATION LOGIC (preserved from original) ===
+
   Future<void> _handleFirstTimeWithCard({
     required String id,
     required String firstName,
@@ -193,6 +325,7 @@ class _CaptureFormState extends State<CaptureForm> {
     if (regData != null) {
       setState(() {
         _currentRegistration = regData;
+        _statusMessage = 'ลงทะเบียนด้วยบัตรประชาชนสำเร็จ';
       });
 
       _showSuccessMessage('ลงทะเบียนด้วยบัตรประชาชนสำเร็จ');
@@ -202,17 +335,16 @@ class _CaptureFormState extends State<CaptureForm> {
     }
   }
 
-  /// เงื่อนไขที่ 2: มาครั้งที่ 2 ไม่พกบัตร (แต่เคยใช้บัตรแล้ว)
   Future<void> _handleReturningWithCard(RegData existingReg) async {
     setState(() {
       _currentRegistration = existingReg;
+      _statusMessage = 'พบข้อมูลเดิม - ข้อมูลไม่สามารถแก้ไขได้';
     });
 
     _showSuccessMessage('พบข้อมูลเดิม - ข้อมูลไม่สามารถแก้ไขได้');
     _showRegistrationDialog(existingReg, isFirstTime: false);
   }
 
-  /// เงื่อนไขที่ 4: มาครั้งต่อมาพกบัตรมาครั้งแรก
   Future<void> _handleUpgradeToCard({
     required RegData existingReg,
     required String id,
@@ -244,6 +376,7 @@ class _CaptureFormState extends State<CaptureForm> {
       if (updatedReg != null) {
         setState(() {
           _currentRegistration = updatedReg;
+          _statusMessage = 'อัปเกรดข้อมูลเป็นบัตรประชาชนสำเร็จ';
         });
 
         _showSuccessMessage('อัปเกรดข้อมูลเป็นบัตรประชาชนสำเร็จ');
@@ -260,6 +393,8 @@ class _CaptureFormState extends State<CaptureForm> {
       _error = null;
     });
   }
+
+  // === UI HELPER METHODS ===
 
   void _showErrorDialog([String? customMessage]) {
     final message = customMessage ?? _error;
@@ -280,7 +415,6 @@ class _CaptureFormState extends State<CaptureForm> {
     }
   }
 
-  /// แสดงข้อความสำเร็จ
   void _showSuccessMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -291,7 +425,16 @@ class _CaptureFormState extends State<CaptureForm> {
     );
   }
 
-  /// แสดง Dialog ยืนยันการอัปเกรด
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   Future<bool?> _showUpgradeConfirmDialog(
     RegData existingReg, 
     Map<String, String> cardData,
@@ -350,7 +493,6 @@ class _CaptureFormState extends State<CaptureForm> {
     );
   }
 
-  /// แสดง Dialog การลงทะเบียน
   void _showRegistrationDialog(RegData regData, {required bool isFirstTime}) {
     showDialog(
       context: context,
@@ -362,16 +504,52 @@ class _CaptureFormState extends State<CaptureForm> {
           Navigator.pop(ctx); // ปิด registration dialog
           Navigator.pop(context); // กลับไปหน้าเมนู
           
-          // แสดงข้อความสำเร็จ
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('ลงทะเบียนเสร็จสิ้น'),
               backgroundColor: Colors.green,
             ),
           );
+
+          // Clear enhanced reader cache for next use
+          _enhancedCardReader.clearCache();
         },
       ),
     );
+  }
+
+  // === ENHANCED CARD READER CONTROLS ===
+
+  void _toggleAutoDetection() {
+    setState(() {
+      _autoDetectionEnabled = !_autoDetectionEnabled;
+    });
+
+    if (_autoDetectionEnabled) {
+      _enhancedCardReader.startMonitoring();
+      setState(() {
+        _statusMessage = 'เปิดระบบตรวจสอบอัตโนมัติ';
+      });
+    } else {
+      _enhancedCardReader.stopMonitoring();
+      setState(() {
+        _statusMessage = 'ปิดระบบตรวจสอบอัตโนมัติ';
+      });
+    }
+  }
+
+  void _manualCardCheck() {
+    _enhancedCardReader.manualCardCheck();
+    _showSuccessMessage('กำลังตรวจสอบบัตรด้วยตนเอง...');
+  }
+
+  void _clearEnhancedCache() {
+    _enhancedCardReader.clearCache();
+    setState(() {
+      _lastProcessedCardId = null;
+      _lastProcessedTime = null;
+    });
+    _showSuccessMessage('ล้างแคชระบบอัตโนมัติแล้ว');
   }
 
   String _formatDate(String? dateString) {
@@ -384,19 +562,141 @@ class _CaptureFormState extends State<CaptureForm> {
     }
   }
 
+  // === UI BUILD METHOD ===
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('อ่านบัตรประชาชน'),
+        title: const Text('อ่านบัตรประชาชนอัจฉริยะ'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            onPressed: _toggleAutoDetection,
+            icon: Icon(_autoDetectionEnabled ? Icons.auto_fix_high : Icons.auto_fix_off),
+            tooltip: _autoDetectionEnabled ? 'ปิดระบบอัตโนมัติ' : 'เปิดระบบอัตโนมัติ',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // USB Device Status
+            // Enhanced System Status Card
+            Card(
+              color: _getEnhancedStatusColor().withOpacity(0.1),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _getEnhancedStatusIcon(),
+                          size: 32,
+                          color: _getEnhancedStatusColor(),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'ระบบตรวจสอบอัตโนมัติ',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: _getEnhancedStatusColor(),
+                                ),
+                              ),
+                              Text(
+                                _statusMessage,
+                                style: TextStyle(
+                                  color: _getEnhancedStatusColor(),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (_autoDetectionEnabled)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Text(
+                              'AUTO',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    
+                    // Enhanced cache information
+                    if (_lastProcessedCardId != null) ...[
+                      const SizedBox(height: 12),
+                      const Divider(),
+                      Row(
+                        children: [
+                          const Icon(Icons.history, size: 16),
+                          const SizedBox(width: 8),
+                          Text(
+                            'บัตรล่าสุด: ${_lastProcessedCardId!.substring(0, 4)}****${_lastProcessedCardId!.substring(_lastProcessedCardId!.length - 4)}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          if (_lastProcessedTime != null)
+                            Text(
+                              ' (${_lastProcessedTime!.toString().substring(11, 19)})',
+                              style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Enhanced Controls
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: _manualCardCheck,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('ตรวจสอบด้วยตนเอง'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+                if (_lastProcessedCardId != null)
+                  ElevatedButton.icon(
+                    onPressed: _clearEnhancedCache,
+                    icon: const Icon(Icons.clear),
+                    label: const Text('ล้างแคช'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+              ],
+            ),
+
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+
+            // Original System Status (fallback)
             if (_device != null)
               Card(
                 child: ListTile(
@@ -427,19 +727,19 @@ class _CaptureFormState extends State<CaptureForm> {
               _buildStatusCard(
                 icon: Icons.usb,
                 title: 'เสียบเครื่องอ่านบัตร',
-                subtitle: 'กรุณาเชื่อมต่อเครื่องอ่านบัตรประชาชน',
+                subtitle: 'กรุณาเชื่อมต่อเครื่องอ่านบัตรประชาชน (สำรอง)',
                 color: Colors.orange,
               ),
             ] else if (_data == null && (_device != null && _device!.hasPermission)) ...[
               _buildStatusCard(
                 icon: Icons.credit_card,
                 title: 'เสียบบัตรประชาชน',
-                subtitle: 'กรุณาเสียบบัตรประชาชนเพื่อเริ่มอ่านข้อมูล',
+                subtitle: 'กรุณาเสียบบัตรประชาชนเพื่อเริ่มอ่านข้อมูล (สำรอง)',
                 color: Colors.blue,
               ),
             ],
 
-            // Reading indicator
+            // Processing indicator
             if (_isReading || _isProcessing) ...[
               const SizedBox(height: 16),
               Card(
@@ -504,7 +804,7 @@ class _CaptureFormState extends State<CaptureForm> {
               ),
             ],
 
-            // Card Data Display
+            // Original Card Data Display (preserved)
             if (_data != null) ...[
               const SizedBox(height: 16),
               
@@ -627,5 +927,34 @@ class _CaptureFormState extends State<CaptureForm> {
         ],
       ),
     );
+  }
+
+  Color _getEnhancedStatusColor() {
+    switch (_enhancedStatus) {
+      case CardReaderStatus.connected:
+      case CardReaderStatus.monitoring:
+        return Colors.green;
+      case CardReaderStatus.cardPresent:
+        return Colors.blue;
+      case CardReaderStatus.disconnected:
+        return Colors.orange;
+      case CardReaderStatus.error:
+        return Colors.red;
+    }
+  }
+
+  IconData _getEnhancedStatusIcon() {
+    switch (_enhancedStatus) {
+      case CardReaderStatus.connected:
+        return Icons.check_circle;
+      case CardReaderStatus.monitoring:
+        return Icons.visibility;
+      case CardReaderStatus.cardPresent:
+        return Icons.credit_card;
+      case CardReaderStatus.disconnected:
+        return Icons.warning;
+      case CardReaderStatus.error:
+        return Icons.error;
+    }
   }
 }

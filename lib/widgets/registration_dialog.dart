@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/reg_data.dart';
+import '../services/db_helper.dart';
+import '../services/menu_settings_service.dart';
+import '../services/printer_service.dart';
 
 /// Dialog สำหรับเลือกอุปกรณ์และวันที่เข้าพัก
 class RegistrationDialog extends StatefulWidget {
@@ -21,12 +24,13 @@ class RegistrationDialog extends StatefulWidget {
 
 class _RegistrationDialogState extends State<RegistrationDialog> {
   final _formKey = GlobalKey<FormState>();
-  
+
   // Controllers สำหรับวันที่
   final _startDateController = TextEditingController();
   final _endDateController = TextEditingController();
   final _locationController = TextEditingController();
   final _notesController = TextEditingController();
+  final _phoneController = TextEditingController();
 
   // ตัวแปรสำหรับอุปกรณ์
   int _shirtCount = 0;
@@ -44,6 +48,8 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
   void initState() {
     super.initState();
     _initializeDefaults();
+    // โหลดเบอร์โทรจากข้อมูลผู้ลงทะเบียน
+    _phoneController.text = widget.regData.phone;
   }
 
   @override
@@ -52,6 +58,7 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
     _endDateController.dispose();
     _locationController.dispose();
     _notesController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -60,10 +67,10 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
     final now = DateTime.now();
     _startDate = DateTime(now.year, now.month, now.day);
     _endDate = _startDate!.add(const Duration(days: 7));
-    
+
     _startDateController.text = _formatDate(_startDate!);
     _endDateController.text = _formatDate(_endDate!);
-    
+
     // ค่าเริ่มต้นของอุปกรณ์
     _shirtCount = 1;
     _pantsCount = 1;
@@ -75,8 +82,8 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
   /// จัดรูปแบบวันที่
   String _formatDate(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}/'
-           '${date.month.toString().padLeft(2, '0')}/'
-           '${date.year}';
+        '${date.month.toString().padLeft(2, '0')}/'
+        '${date.year}';
   }
 
   /// แปลงวันที่จากข้อความเป็น DateTime
@@ -98,7 +105,7 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
   /// เลือกวันที่
   Future<void> _selectDate(bool isStartDate) async {
     final currentDate = isStartDate ? _startDate : _endDate;
-    
+
     final selectedDate = await showDatePicker(
       context: context,
       initialDate: currentDate ?? DateTime.now(),
@@ -111,7 +118,7 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
         if (isStartDate) {
           _startDate = selectedDate;
           _startDateController.text = _formatDate(selectedDate);
-          
+
           // อัปเดตวันสิ้นสุดให้อยู่หลังวันเริ่มต้น
           if (_endDate != null && _endDate!.isBefore(selectedDate)) {
             _endDate = selectedDate.add(const Duration(days: 1));
@@ -132,15 +139,12 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
   /// แสดงข้อความข้อผิดพลาด
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
     );
   }
 
   /// บันทึกข้อมูล
-  void _saveRegistration() {
+  Future<void> _saveRegistration() async {
     if (!_formKey.currentState!.validate()) return;
 
     // ตรวจสอบวันที่
@@ -149,28 +153,82 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
       return;
     }
 
-    if (_endDate!.isBefore(_startDate!) || _endDate!.isAtSameMomentAs(_startDate!)) {
+    if (_endDate!.isBefore(_startDate!) ||
+        _endDate!.isAtSameMomentAs(_startDate!)) {
       _showErrorSnackBar('วันออกต้องอยู่หลังวันเข้าพัก');
       return;
     }
 
-    // สร้างข้อมูลเพิ่มเติม
-    final additionalInfo = RegAdditionalInfo.create(
-      regId: widget.regData.id,
-      startDate: _startDate!,
-      endDate: _endDate!,
-      shirtCount: _shirtCount,
-      pantsCount: _pantsCount,
-      matCount: _matCount,
-      pillowCount: _pillowCount,
-      blanketCount: _blanketCount,
-      location: _locationController.text.trim(),
-      withChildren: _withChildren,
-      childrenCount: _withChildren ? _childrenCount : 0,
-      notes: _notesController.text.trim(),
-    );
+    try {
+      // อัปเดตเบอร์โทรในข้อมูลผู้ลงทะเบียนหากมีการเปลี่ยนแปลง
+      final updatedPhone = _phoneController.text.trim();
+      if (updatedPhone != widget.regData.phone) {
+        final updatedRegData = widget.regData.copyWithEditable(
+          phone: updatedPhone,
+        );
+        await DbHelper().update(updatedRegData);
+      }
 
-    widget.onCompleted(additionalInfo);
+      // สร้าง Stay record
+      final newStay = StayRecord.create(
+        visitorId: widget.regData.id,
+        startDate: _startDate!,
+        endDate: _endDate!,
+        note: _notesController.text.trim(),
+      );
+      final stayId = await DbHelper().insertStay(newStay);
+
+      // สร้าง StayRecord ที่มี ID จากฐานข้อมูล
+      final stayRecordForPrint = StayRecord(
+        id: stayId,
+        visitorId: newStay.visitorId,
+        startDate: newStay.startDate,
+        endDate: newStay.endDate,
+        status: newStay.status,
+        note: newStay.note,
+        createdAt: newStay.createdAt,
+      );
+
+      // สร้างข้อมูลอุปกรณ์ด้วย unique visitId
+      final visitId =
+          '${widget.regData.id}_${stayRecordForPrint.createdAt.millisecondsSinceEpoch}';
+
+      final additionalInfo = RegAdditionalInfo.create(
+        regId: widget.regData.id,
+        visitId: visitId,
+        startDate: null, // ไม่เก็บใน additional_info แล้ว
+        endDate: null, // อ่านจาก stays table
+        shirtCount: _shirtCount,
+        pantsCount: _pantsCount,
+        matCount: _matCount,
+        pillowCount: _pillowCount,
+        blanketCount: _blanketCount,
+        location: _locationController.text.trim(),
+        withChildren: _withChildren,
+        childrenCount: _withChildren ? _childrenCount : 0,
+        notes: '', // หมายเหตุย้ายไป stays table แล้ว
+      );
+
+      await DbHelper().insertAdditionalInfo(additionalInfo);
+
+      // ตรวจสอบสถานะเมนูเบิกชุดขาวและพิมพ์ใบเสร็จ
+      final isWhiteRobeEnabled = await MenuSettingsService().isWhiteRobeEnabled;
+      if (isWhiteRobeEnabled) {
+        final regData = await DbHelper().fetchById(widget.regData.id);
+        if (regData != null) {
+          await PrinterService().printReceipt(
+            regData,
+            additionalInfo: additionalInfo,
+            stayRecord: stayRecordForPrint,
+          );
+        }
+      }
+
+      // เรียกใช้ callback
+      widget.onCompleted(additionalInfo);
+    } catch (e) {
+      _showErrorSnackBar('เกิดข้อผิดพลาดในการบันทึก: $e');
+    }
   }
 
   @override
@@ -190,15 +248,16 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                 children: [
                   Icon(
                     widget.regData.hasIdCard ? Icons.credit_card : Icons.person,
-                    color: widget.regData.hasIdCard ? Colors.blue : Colors.orange,
+                    color: widget.regData.hasIdCard
+                        ? Colors.blue
+                        : Colors.orange,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'ลงทะเบียนเข้าพัก',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
                   IconButton(
@@ -209,6 +268,13 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
               ),
               const Divider(),
               
+              // Scrollable content
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+
               // ข้อมูลผู้ลงทะเบียน
               Card(
                 child: Padding(
@@ -218,23 +284,47 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                     children: [
                       Text(
                         'ข้อมูลผู้ลงทะเบียน',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      Text('ชื่อ-นามสกุล: ${widget.regData.first} ${widget.regData.last}'),
-                      Text('เลขบัตร/โทร: ${widget.regData.id}'),
+                      Text(
+                        'ชื่อ-นามสกุล: ${widget.regData.first} ${widget.regData.last}',
+                      ),
+                      Text('เลขบัตร: ${widget.regData.id}'),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _phoneController,
+                        decoration: const InputDecoration(
+                          labelText: 'เบอร์โทรศัพท์',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.phone),
+                        ),
+                        keyboardType: TextInputType.phone,
+                        validator: (value) {
+                          if (value != null && value.isNotEmpty) {
+                            // ตรวจสอบรูปแบบเบอร์โทร
+                            final phoneRegex = RegExp(r'^[0-9]{9,10}$');
+                            if (!phoneRegex.hasMatch(value)) {
+                              return 'กรุณากรอกเบอร์โทรให้ถูกต้อง';
+                            }
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 8),
                       Row(
                         children: [
                           Text('สถานะบัตร: '),
                           Chip(
                             label: Text(
-                              widget.regData.hasIdCard ? 'มีบัตรประชาชน' : 'ไม่มีบัตร',
+                              widget.regData.hasIdCard
+                                  ? 'มีบัตรประชาชน'
+                                  : 'ไม่มีบัตร',
                               style: const TextStyle(fontSize: 12),
                             ),
-                            backgroundColor: widget.regData.hasIdCard 
-                                ? Colors.green.shade100 
+                            backgroundColor: widget.regData.hasIdCard
+                                ? Colors.green.shade100
                                 : Colors.orange.shade100,
                           ),
                         ],
@@ -242,10 +332,7 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                       if (!widget.regData.hasIdCard)
                         const Text(
                           '* สามารถแก้ไขข้อมูลส่วนตัวได้ภายหลัง',
-                          style: TextStyle(
-                            color: Colors.orange,
-                            fontSize: 12,
-                          ),
+                          style: TextStyle(color: Colors.orange, fontSize: 12),
                         ),
                     ],
                   ),
@@ -261,12 +348,11 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                       // วันที่เข้าพัก
                       Text(
                         'ระยะเวลาการพัก',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      
+
                       Row(
                         children: [
                           Expanded(
@@ -313,23 +399,26 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                       // เสื้อผ้าชุดขาว
                       Text(
                         'เสื้อผ้าชุดขาว',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      
+
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
                             children: [
-                              _buildCounterRow('เสื้อขาว', _shirtCount, (value) {
+                              _buildCounterRow('เสื้อขาว', _shirtCount, (
+                                value,
+                              ) {
                                 setState(() {
                                   _shirtCount = value;
                                 });
                               }),
-                              _buildCounterRow('กางเกงขาว', _pantsCount, (value) {
+                              _buildCounterRow('กางเกงขาว', _pantsCount, (
+                                value,
+                              ) {
                                 setState(() {
                                   _pantsCount = value;
                                 });
@@ -343,12 +432,11 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                       // อุปกรณ์การนอน
                       Text(
                         'อุปกรณ์การนอน',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      
+
                       Card(
                         child: Padding(
                           padding: const EdgeInsets.all(16),
@@ -364,7 +452,9 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                                   _pillowCount = value;
                                 });
                               }),
-                              _buildCounterRow('ผ้าห่ม', _blanketCount, (value) {
+                              _buildCounterRow('ผ้าห่ม', _blanketCount, (
+                                value,
+                              ) {
                                 setState(() {
                                   _blanketCount = value;
                                 });
@@ -378,12 +468,11 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                       // ข้อมูลเพิ่มเติม
                       Text(
                         'ข้อมูลเพิ่มเติม',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 8),
-                      
+
                       // สถานที่พัก
                       TextFormField(
                         controller: _locationController,
@@ -445,10 +534,7 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                 ),
                 child: const Text(
                   'ยืนยันการลงทะเบียน',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ],

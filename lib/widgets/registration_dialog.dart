@@ -267,84 +267,81 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                 ],
               ),
               const Divider(),
-              
+
               // Scrollable content
               Expanded(
                 child: SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-
-              // ข้อมูลผู้ลงทะเบียน
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'ข้อมูลผู้ลงทะเบียน',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'ชื่อ-นามสกุล: ${widget.regData.first} ${widget.regData.last}',
-                      ),
-                      Text('เลขบัตร: ${widget.regData.id}'),
-                      const SizedBox(height: 8),
-                      TextFormField(
-                        controller: _phoneController,
-                        decoration: const InputDecoration(
-                          labelText: 'เบอร์โทรศัพท์',
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.phone),
-                        ),
-                        keyboardType: TextInputType.phone,
-                        validator: (value) {
-                          if (value != null && value.isNotEmpty) {
-                            // ตรวจสอบรูปแบบเบอร์โทร
-                            final phoneRegex = RegExp(r'^[0-9]{9,10}$');
-                            if (!phoneRegex.hasMatch(value)) {
-                              return 'กรุณากรอกเบอร์โทรให้ถูกต้อง';
-                            }
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Text('สถานะบัตร: '),
-                          Chip(
-                            label: Text(
-                              widget.regData.hasIdCard
-                                  ? 'มีบัตรประชาชน'
-                                  : 'ไม่มีบัตร',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            backgroundColor: widget.regData.hasIdCard
-                                ? Colors.green.shade100
-                                : Colors.orange.shade100,
+                      // ข้อมูลผู้ลงทะเบียน
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'ข้อมูลผู้ลงทะเบียน',
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'ชื่อ-นามสกุล: ${widget.regData.first} ${widget.regData.last}',
+                              ),
+                              Text('เลขบัตร: ${widget.regData.id}'),
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                controller: _phoneController,
+                                decoration: const InputDecoration(
+                                  labelText: 'เบอร์โทรศัพท์',
+                                  border: OutlineInputBorder(),
+                                  prefixIcon: Icon(Icons.phone),
+                                ),
+                                keyboardType: TextInputType.phone,
+                                validator: (value) {
+                                  if (value != null && value.isNotEmpty) {
+                                    // ตรวจสอบรูปแบบเบอร์โทร
+                                    final phoneRegex = RegExp(r'^[0-9]{9,10}$');
+                                    if (!phoneRegex.hasMatch(value)) {
+                                      return 'กรุณากรอกเบอร์โทรให้ถูกต้อง';
+                                    }
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Text('สถานะบัตร: '),
+                                  Chip(
+                                    label: Text(
+                                      widget.regData.hasIdCard
+                                          ? 'มีบัตรประชาชน'
+                                          : 'ไม่มีบัตร',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                    backgroundColor: widget.regData.hasIdCard
+                                        ? Colors.green.shade100
+                                        : Colors.orange.shade100,
+                                  ),
+                                ],
+                              ),
+                              if (!widget.regData.hasIdCard)
+                                const Text(
+                                  '* สามารถแก้ไขข้อมูลส่วนตัวได้ภายหลัง',
+                                  style: TextStyle(
+                                    color: Colors.orange,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                            ],
                           ),
-                        ],
-                      ),
-                      if (!widget.regData.hasIdCard)
-                        const Text(
-                          '* สามารถแก้ไขข้อมูลส่วนตัวได้ภายหลัง',
-                          style: TextStyle(color: Colors.orange, fontSize: 12),
                         ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
+                      ),
+                      const SizedBox(height: 16),
 
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
                       // วันที่เข้าพัก
                       Text(
                         'ระยะเวลาการพัก',
@@ -517,24 +514,27 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
                         ),
                         maxLines: 3,
                       ),
+
+                      const SizedBox(height: 16),
+
+                      // ปุ่มบันทึก
+                      ElevatedButton(
+                        onPressed: _saveRegistration,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: const Text(
+                          'ยืนยันการลงทะเบียน',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // ปุ่มบันทึก
-              ElevatedButton(
-                onPressed: _saveRegistration,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text(
-                  'ยืนยันการลงทะเบียน',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ],

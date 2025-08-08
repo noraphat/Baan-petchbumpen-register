@@ -35,8 +35,18 @@ enum RoomShape {
   square('square', 'สี่เหลี่ยมจตุรัส', 50.0, 50.0),
   rectangleHorizontal('rect_h', 'สี่เหลี่ยมผืนผ้า (แนวนอน)', 80.0, 50.0),
   rectangleVertical('rect_v', 'สี่เหลี่ยมผืนผ้า (แนวตั้ง)', 50.0, 80.0),
-  rectangleHorizontalLarge('rect_h_large', 'สี่เหลี่ยมผืนผ้า (แนวนอน x2)', 160.0, 50.0),
-  rectangleVerticalLarge('rect_v_large', 'สี่เหลี่ยมผืนผ้า (แนวตั้ง x2)', 50.0, 160.0);
+  rectangleHorizontalLarge(
+    'rect_h_large',
+    'สี่เหลี่ยมผืนผ้า (แนวนอน x2)',
+    160.0,
+    50.0,
+  ),
+  rectangleVerticalLarge(
+    'rect_v_large',
+    'สี่เหลี่ยมผืนผ้า (แนวตั้ง x2)',
+    50.0,
+    160.0,
+  );
 
   const RoomShape(this.code, this.displayName, this.width, this.height);
   final String code;
@@ -80,8 +90,8 @@ class Room {
     this.currentOccupant,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   /// สร้างห้องใหม่
   factory Room.create({
@@ -154,9 +164,9 @@ class Room {
       id: map['id'] as int?,
       name: map['name'] as String,
       size: RoomSize.fromCode(map['size'] as String),
-      shape: map['shape'] != null 
-        ? RoomShape.fromCode(map['shape'] as String)
-        : RoomShape.square, // default สำหรับข้อมูลเก่า
+      shape: map['shape'] != null
+          ? RoomShape.fromCode(map['shape'] as String)
+          : RoomShape.square, // default สำหรับข้อมูลเก่า
       capacity: map['capacity'] as int,
       positionX: map['position_x'] as double?,
       positionY: map['position_y'] as double?,
@@ -222,8 +232,8 @@ class MapData {
     this.description,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   /// สร้างแผนที่ใหม่
   factory MapData.create({
@@ -300,7 +310,8 @@ class MapData {
   String toJson() => json.encode(toMap());
 
   /// สร้างจาก JSON
-  factory MapData.fromJson(String source) => MapData.fromMap(json.decode(source));
+  factory MapData.fromJson(String source) =>
+      MapData.fromMap(json.decode(source));
 
   /// ตรวจสอบว่ามีรูปภาพแผนที่หรือไม่
   bool get hasImage => imagePath != null && imagePath!.isNotEmpty;
@@ -342,8 +353,8 @@ class RoomBooking {
     this.note,
     DateTime? createdAt,
     DateTime? updatedAt,
-  })  : createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now(),
+       updatedAt = updatedAt ?? DateTime.now();
 
   /// คัดลอกการจองพร้อมแก้ไขข้อมูล
   RoomBooking copyWith({
@@ -408,5 +419,66 @@ class RoomBooking {
   @override
   String toString() {
     return 'RoomBooking(id: $id, roomId: $roomId, visitorId: $visitorId, status: $status)';
+  }
+}
+
+/// โมเดลสำหรับสรุปการใช้งานห้องพัก
+class RoomUsageSummary {
+  final String roomName;
+  final int usageDays;
+  final String dailyStatus;
+  final int totalVisitors;
+  final double occupancyRate;
+  final DateTime? lastCheckIn;
+  final DateTime? lastCheckOut;
+  final String roomSize;
+  final String guestName;
+  final bool isSingleDay;
+
+  RoomUsageSummary({
+    required this.roomName,
+    required this.usageDays,
+    required this.dailyStatus,
+    required this.totalVisitors,
+    required this.occupancyRate,
+    this.lastCheckIn,
+    this.lastCheckOut,
+    this.roomSize = 'ไม่ระบุ',
+    this.guestName = '',
+    this.isSingleDay = false,
+  });
+
+  factory RoomUsageSummary.fromMap(Map<String, dynamic> map) {
+    return RoomUsageSummary(
+      roomName: map['room_name'] ?? '',
+      usageDays: map['usage_days'] ?? 0,
+      dailyStatus: map['daily_status'] ?? 'ว่าง',
+      totalVisitors: map['total_visitors'] ?? 0,
+      occupancyRate: (map['occupancy_rate'] ?? 0.0).toDouble(),
+      lastCheckIn: map['last_check_in'] != null
+          ? DateTime.parse(map['last_check_in'])
+          : null,
+      lastCheckOut: map['last_check_out'] != null
+          ? DateTime.parse(map['last_check_out'])
+          : null,
+      roomSize: map['room_size'] ?? 'ไม่ระบุ',
+      guestName: map['guest_name'] ?? '',
+      isSingleDay: map['is_single_day'] ?? false,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'room_name': roomName,
+      'usage_days': usageDays,
+      'daily_status': dailyStatus,
+      'total_visitors': totalVisitors,
+      'occupancy_rate': occupancyRate,
+      'last_check_in': lastCheckIn?.toIso8601String(),
+      'last_check_out': lastCheckOut?.toIso8601String(),
+      'room_size': roomSize,
+      'guest_name': guestName,
+      'is_single_day': isSingleDay,
+    };
   }
 }

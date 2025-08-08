@@ -5,40 +5,28 @@ import 'package:intl/intl.dart';
 import 'dart:async';
 import '../../models/reg_data.dart';
 import '../../services/registration_service.dart';
-import '../../services/enhanced_card_reader_service.dart';
-import '../../widgets/registration_dialog.dart';
+import '../../services/stay_service.dart';
+import '../../widgets/unified_registration_dialog.dart';
 
-class CaptureForm extends StatefulWidget {
-  const CaptureForm({super.key});
+/// Unified ID card registration form that uses the new service architecture
+/// This implements the core requirement for unified registration logic
+class UnifiedCaptureForm extends StatefulWidget {
+  const UnifiedCaptureForm({super.key});
 
   @override
-  State<CaptureForm> createState() => _CaptureFormState();
+  State<UnifiedCaptureForm> createState() => _UnifiedCaptureFormState();
 }
 
-class _CaptureFormState extends State<CaptureForm> {
+class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
   final RegistrationService _registrationService = RegistrationService();
-  final EnhancedCardReaderService _enhancedCardReader = EnhancedCardReaderService();
   
   ThaiIDCard? _data;
   UsbDevice? _device;
-  dynamic _card;
   String? _error;
   bool _isReading = false;
   bool _isProcessing = false;
   bool _isManualReading = false;
   RegData? _currentRegistration;
-
-  // Enhanced card reader state
-  CardReaderStatus _enhancedStatus = CardReaderStatus.disconnected;
-  String _statusMessage = 'กำลังเริ่มต้นระบบ...';
-  bool _autoDetectionEnabled = true;
-  String? _lastProcessedCardId;
-  DateTime? _lastProcessedTime;
-
-  // Stream subscriptions for enhanced card reader
-  StreamSubscription<CardReaderEvent>? _eventSubscription;
-  StreamSubscription<String?>? _errorSubscription;
-  StreamSubscription<CardReaderStatus>? _statusSubscription;
 
   @override
   void initState() {
@@ -69,10 +57,6 @@ class _CaptureFormState extends State<CaptureForm> {
 
   void _onData(readerEvent) {
     try {
-      setState(() {
-        _card = readerEvent;
-      });
-
       if (readerEvent.isReady && !_isReading) {
         _readCard();
       } else {
@@ -101,8 +85,8 @@ class _CaptureFormState extends State<CaptureForm> {
         _error = null;
       });
       
-      // ประมวลผลข้อมูลบัตรประชาชนตาม Logic ที่กำหนด
-      await _processCardData(result);
+      // Process card data using unified logic
+      await _processCardDataUnified(result);
       
     } catch (e) {
       setState(() {
@@ -123,15 +107,13 @@ class _CaptureFormState extends State<CaptureForm> {
     setState(() {
       _isManualReading = true;
       _error = null;
-      _data = null; // Clear previous data
-      _currentRegistration = null; // Clear previous registration
+      _data = null;
+      _currentRegistration = null;
     });
 
     try {
-      // Add a small delay to ensure card reader is ready
       await Future.delayed(const Duration(milliseconds: 300));
       
-      // Try to read the card directly
       var result = await ThaiIdcardReaderFlutter.read();
       
       if (result.cid != null) {
@@ -140,10 +122,8 @@ class _CaptureFormState extends State<CaptureForm> {
           _error = null;
         });
         
-        // Process the card data
-        await _processCardData(result);
+        await _processCardDataUnified(result);
         
-        // Show success message
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -162,7 +142,6 @@ class _CaptureFormState extends State<CaptureForm> {
         _error = 'ไม่สามารถอ่านบัตรประชาชนได้: $e';
       });
       
-      // Show error dialog or snackbar
       if (mounted) {
         _showRecheckErrorDialog(e.toString());
       }
@@ -178,11 +157,11 @@ class _CaptureFormState extends State<CaptureForm> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Row(
+        title: const Row(
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 24),
-            const SizedBox(width: 8),
-            const Text('ไม่สามารถอ่านบัตรได้'),
+            Icon(Icons.error_outline, color: Colors.red, size: 24),
+            SizedBox(width: 8),
+            Text('ไม่สามารถอ่านบัตรได้'),
           ],
         ),
         content: Column(
@@ -210,7 +189,6 @@ class _CaptureFormState extends State<CaptureForm> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // Try again after a short delay
               Future.delayed(const Duration(milliseconds: 500), () {
                 _recheckCard();
               });
@@ -226,8 +204,9 @@ class _CaptureFormState extends State<CaptureForm> {
     );
   }
 
-  /// ประมวลผลข้อมูลบัตรประชาชนตามเงื่อนไข Logic
-  Future<void> _processCardData(ThaiIDCard cardData) async {
+  /// Process card data using unified logic
+  /// This is the core implementation of the unified requirements
+  Future<void> _processCardDataUnified(ThaiIDCard cardData) async {
     if (cardData.cid == null) {
       _showErrorDialog('ไม่พบเลขบัตรประชาชน');
       return;
@@ -238,42 +217,65 @@ class _CaptureFormState extends State<CaptureForm> {
     });
 
     try {
-      final id = cardData.cid!;
-      final firstName = cardData.firstnameTH ?? '';
-      final lastName = cardData.lastnameTH ?? '';
-      final dateOfBirth = cardData.birthdate ?? '';
-      final address = cardData.address ?? '';
-      final gender = cardData.gender == 1 ? 'ชาย' : 'หญิง';
+      final cid = cardData.cid!;
+      debugPrint('🆔 Processing ID card: $cid');
 
-      // ตรวจสอบข้อมูลเดิมในฐานข้อมูล
-      final existingReg = await _registrationService.findExistingRegistration(id);
+      // Step 1: Check if user exists
+      final existingReg = await _registrationService.findExistingRegistration(cid);
+      
+      // Step 2: Get latest stay using unified service
+      final latestStay = await StayService.getLatestStay(cid);
+      
+      // Step 3: Determine mode (CREATE vs EDIT)
+      final stayStatus = await StayService.getStayStatus(cid);
+      final isEditMode = stayStatus['isEditMode'] as bool;
+
+      debugPrint('🔍 Stay status: $stayStatus');
+      debugPrint('📝 Edit mode: $isEditMode');
+      debugPrint('📅 Latest stay: ${latestStay?.id}');
+
+      RegData regData;
 
       if (existingReg == null) {
-        // เงื่อนไขที่ 1: มาครั้งแรกพร้อมบัตรประชาชน
-        await _handleFirstTimeWithCard(
-          id: id,
-          firstName: firstName,
-          lastName: lastName,
-          dateOfBirth: dateOfBirth,
-          address: address,
-          gender: gender,
-        );
+        // First time registration with ID card
+        debugPrint('✨ First time registration');
+        regData = await _handleFirstTimeWithCard(cardData);
       } else if (existingReg.hasIdCard) {
-        // เงื่อนไขที่ 2: มาครั้งที่ 2 ไม่พกบัตร (แต่เคยใช้บัตรแล้ว)
-        await _handleReturningWithCard(existingReg);
+        // Returning user with ID card (data locked)
+        debugPrint('🔄 Returning user with locked data');
+        regData = existingReg;
       } else {
-        // เงื่อนไขที่ 4: มาครั้งต่อมาพกบัตรมาครั้งแรก
-        await _handleUpgradeToCard(
-          existingReg: existingReg,
-          id: id,
-          firstName: firstName,
-          lastName: lastName,
-          dateOfBirth: dateOfBirth,
-          address: address,
-          gender: gender,
+        // Upgrade manual registration to ID card
+        debugPrint('⬆️ Upgrading manual to ID card');
+        final confirmed = await _showUpgradeConfirmDialog(existingReg, cardData);
+        if (confirmed != true) return;
+        
+        regData = await _handleUpgradeToCard(existingReg, cardData);
+      }
+
+      setState(() {
+        _currentRegistration = regData;
+      });
+
+      // Step 4: Load existing additional info if in edit mode
+      RegAdditionalInfo? existingAdditionalInfo;
+      if (isEditMode && latestStay != null) {
+        existingAdditionalInfo = await StayService.getAdditionalInfoForStay(cid, latestStay);
+        debugPrint('📦 Loaded existing additional info: ${existingAdditionalInfo?.visitId}');
+      }
+
+      // Step 5: Show unified registration dialog
+      if (mounted) {
+        _showUnifiedRegistrationDialog(
+          regData: regData,
+          isEditMode: isEditMode,
+          existingStay: latestStay,
+          existingAdditionalInfo: existingAdditionalInfo,
         );
       }
+
     } catch (e) {
+      debugPrint('❌ Error processing card: $e');
       _showErrorDialog('เกิดข้อผิดพลาดในการประมวลผล: $e');
     } finally {
       setState(() {
@@ -282,131 +284,48 @@ class _CaptureFormState extends State<CaptureForm> {
     }
   }
 
-  /// เงื่อนไขที่ 1: มาครั้งแรกพร้อมบัตรประชาชน
-  Future<void> _handleFirstTimeWithCard({
-    required String id,
-    required String firstName,
-    required String lastName,
-    required String dateOfBirth,
-    required String address,
-    required String gender,
-  }) async {
+  /// Handle first time registration with ID card
+  Future<RegData> _handleFirstTimeWithCard(ThaiIDCard cardData) async {
     final regData = await _registrationService.registerWithIdCard(
-      id: id,
-      first: firstName,
-      last: lastName,
-      dob: dateOfBirth,
-      addr: address,
-      gender: gender,
+      id: cardData.cid!,
+      first: cardData.firstnameTH ?? '',
+      last: cardData.lastnameTH ?? '',
+      dob: cardData.birthdate ?? '',
+      addr: cardData.address ?? '',
+      gender: cardData.gender == 1 ? 'ชาย' : 'หญิง',
       phone: '',
     );
 
-    if (regData != null) {
-      setState(() {
-        _currentRegistration = regData;
-      });
-
-      _showSuccessMessage('ลงทะเบียนด้วยบัตรประชาชนสำเร็จ');
-      _showRegistrationDialog(regData, isFirstTime: true);
-    } else {
-      _showErrorDialog('ไม่สามารถลงทะเบียนได้');
+    if (regData == null) {
+      throw Exception('ไม่สามารถลงทะเบียนได้');
     }
+
+    _showSuccessMessage('ลงทะเบียนด้วยบัตรประชาชนสำเร็จ');
+    return regData;
   }
 
-  /// เงื่อนไขที่ 2: มาครั้งที่ 2 ไม่พกบัตร (แต่เคยใช้บัตรแล้ว)
-  Future<void> _handleReturningWithCard(RegData existingReg) async {
-    setState(() {
-      _currentRegistration = existingReg;
-    });
-
-    _showSuccessMessage('พบข้อมูลเดิม - ข้อมูลไม่สามารถแก้ไขได้');
-    _showRegistrationDialog(existingReg, isFirstTime: false);
-  }
-
-  /// เงื่อนไขที่ 4: มาครั้งต่อมาพกบัตรมาครั้งแรก
-  Future<void> _handleUpgradeToCard({
-    required RegData existingReg,
-    required String id,
-    required String firstName,
-    required String lastName,
-    required String dateOfBirth,
-    required String address,
-    required String gender,
-  }) async {
-    final confirmed = await _showUpgradeConfirmDialog(existingReg, {
-      'firstName': firstName,
-      'lastName': lastName,
-      'dateOfBirth': dateOfBirth,
-      'address': address,
-      'gender': gender,
-    });
-
-    if (confirmed == true) {
-      final updatedReg = await _registrationService.upgradeToIdCard(
-        id: id,
-        first: firstName,
-        last: lastName,
-        dob: dateOfBirth,
-        addr: address,
-        gender: gender,
-        phone: existingReg.phone,
-      );
-
-      if (updatedReg != null) {
-        setState(() {
-          _currentRegistration = updatedReg;
-        });
-
-        _showSuccessMessage('อัปเกรดข้อมูลเป็นบัตรประชาชนสำเร็จ');
-        _showRegistrationDialog(updatedReg, isFirstTime: false);
-      } else {
-        _showErrorDialog('ไม่สามารถอัปเกรดข้อมูลได้');
-      }
-    }
-  }
-
-  void _clear() {
-    setState(() {
-      _data = null;
-      _error = null;
-    });
-  }
-
-  void _showErrorDialog([String? customMessage]) {
-    final message = customMessage ?? _error;
-    if (message != null) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('เกิดข้อผิดพลาด'),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('ปิด'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  /// แสดงข้อความสำเร็จ
-  void _showSuccessMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 3),
-      ),
+  /// Handle upgrade from manual to ID card
+  Future<RegData> _handleUpgradeToCard(RegData existingReg, ThaiIDCard cardData) async {
+    final updatedReg = await _registrationService.upgradeToIdCard(
+      id: cardData.cid!,
+      first: cardData.firstnameTH ?? '',
+      last: cardData.lastnameTH ?? '',
+      dob: cardData.birthdate ?? '',
+      addr: cardData.address ?? '',
+      gender: cardData.gender == 1 ? 'ชาย' : 'หญิง',
+      phone: existingReg.phone,
     );
+
+    if (updatedReg == null) {
+      throw Exception('ไม่สามารถอัปเกรดข้อมูลได้');
+    }
+
+    _showSuccessMessage('อัปเกรดข้อมูลเป็นบัตรประชาชนสำเร็จ');
+    return updatedReg;
   }
 
-  /// แสดง Dialog ยืนยันการอัปเกรด
-  Future<bool?> _showUpgradeConfirmDialog(
-    RegData existingReg, 
-    Map<String, String> cardData,
-  ) {
+  /// Show upgrade confirmation dialog
+  Future<bool?> _showUpgradeConfirmDialog(RegData existingReg, ThaiIDCard cardData) {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -428,9 +347,9 @@ class _CaptureFormState extends State<CaptureForm> {
             const SizedBox(height: 12),
             
             const Text('ข้อมูลจากบัตร:'),
-            Text('ชื่อ-นามสกุล: ${cardData['firstName']} ${cardData['lastName']}'),
-            Text('วันเกิด: ${cardData['dateOfBirth']}'),
-            Text('เพศ: ${cardData['gender']}'),
+            Text('ชื่อ-นามสกุล: ${cardData.firstnameTH} ${cardData.lastnameTH}'),
+            Text('วันเกิด: ${cardData.birthdate}'),
+            Text('เพศ: ${cardData.gender == 1 ? 'ชาย' : 'หญิง'}'),
             const SizedBox(height: 16),
             
             const Text(
@@ -461,26 +380,71 @@ class _CaptureFormState extends State<CaptureForm> {
     );
   }
 
-  /// แสดง Dialog การลงทะเบียน
-  void _showRegistrationDialog(RegData regData, {required bool isFirstTime}) {
+  /// Show unified registration dialog
+  void _showUnifiedRegistrationDialog({
+    required RegData regData,
+    required bool isEditMode,
+    required StayRecord? existingStay,
+    required RegAdditionalInfo? existingAdditionalInfo,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => RegistrationDialog(
+      builder: (ctx) => UnifiedRegistrationDialog(
         regData: regData,
-        isFirstTime: isFirstTime,
+        isEditMode: isEditMode,
+        existingStay: existingStay,
+        existingAdditionalInfo: existingAdditionalInfo,
         onCompleted: (additionalInfo) {
-          Navigator.pop(ctx); // ปิด registration dialog
-          Navigator.pop(context); // กลับไปหน้าเมนู
+          Navigator.pop(ctx); // Close registration dialog
+          Navigator.pop(context); // Return to menu
           
-          // แสดงข้อความสำเร็จ
+          // Show success message
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ลงทะเบียนเสร็จสิ้น'),
+            SnackBar(
+              content: Text(isEditMode ? 'อัปเดตข้อมูลเรียบร้อยแล้ว' : 'ลงทะเบียนเสร็จสิ้น'),
               backgroundColor: Colors.green,
             ),
           );
         },
+      ),
+    );
+  }
+
+  void _clear() {
+    setState(() {
+      _data = null;
+      _error = null;
+      _currentRegistration = null;
+    });
+  }
+
+  void _showErrorDialog([String? customMessage]) {
+    final message = customMessage ?? _error;
+    if (message != null) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('เกิดข้อผิดพลาด'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('ปิด'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  /// Show success message
+  void _showSuccessMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -499,10 +463,12 @@ class _CaptureFormState extends State<CaptureForm> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('อ่านบัตรประชาชน'),
+        title: const Text('อ่านบัตรประชาชน (Unified)'),
         centerTitle: true,
       ),
-      floatingActionButton: _device != null && _device!.hasPermission && !(_isReading || _isProcessing || _isManualReading)
+      floatingActionButton: _device != null && 
+          _device!.hasPermission && 
+          !(_isReading || _isProcessing || _isManualReading)
           ? FloatingActionButton.extended(
               onPressed: _recheckCard,
               icon: const Icon(Icons.refresh),
@@ -609,8 +575,8 @@ class _CaptureFormState extends State<CaptureForm> {
                       const SizedBox(width: 16),
                       Text(
                         _isManualReading 
-                          ? 'กำลังตรวจสอบบัตร...' 
-                          : (_isReading ? 'กำลังอ่านข้อมูล...' : 'กำลังประมวลผล...'),
+                            ? 'กำลังตรวจสอบบัตร...' 
+                            : (_isReading ? 'กำลังอ่านข้อมูล...' : 'กำลังประมวลผล...'),
                         style: const TextStyle(fontSize: 16),
                       ),
                     ],

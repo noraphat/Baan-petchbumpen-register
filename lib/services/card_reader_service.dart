@@ -1,323 +1,480 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:thai_idcard_reader_flutter/thai_idcard_reader_flutter.dart';
 
-/// ข้อมูลที่อ่านได้จากบัตรประชาชน
-class IdCardData {
-  final String id;           // เลขบัตรประชาชน
-  final String firstName;    // ชื่อ
-  final String lastName;     // นามสกุล
-  final String dateOfBirth;  // วันเกิด (YYYY-MM-DD format)
-  final String address;      // ที่อยู่
-  final String gender;       // เพศ (ชาย/หญิง)
-  final DateTime readAt;     // วันเวลาที่อ่าน
-
-  IdCardData({
-    required this.id,
-    required this.firstName,
-    required this.lastName,
-    required this.dateOfBirth,
-    required this.address,
-    required this.gender,
-    required this.readAt,
-  });
-
-  factory IdCardData.fromJson(Map<String, dynamic> json) {
-    return IdCardData(
-      id: json['id'] ?? '',
-      firstName: json['firstName'] ?? '',
-      lastName: json['lastName'] ?? '',
-      dateOfBirth: json['dateOfBirth'] ?? '',
-      address: json['address'] ?? '',
-      gender: json['gender'] ?? 'อื่น ๆ',
-      readAt: DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> toMap() => {
-        'id': id,
-        'firstName': firstName,
-        'lastName': lastName,
-        'dateOfBirth': dateOfBirth,
-        'address': address,
-        'gender': gender,
-        'readAt': readAt.toIso8601String(),
-      };
-
-  @override
-  String toString() {
-    return 'IdCardData{id: $id, name: $firstName $lastName, dob: $dateOfBirth}';
-  }
-}
-
-/// สถานะของเครื่องอ่านบัตร
-enum CardReaderStatus {
+/// สถานะการเชื่อมต่อเครื่องอ่านบัตร
+enum CardReaderConnectionStatus {
   disconnected,   // ไม่ได้เชื่อมต่อ
+  connecting,     // กำลังเชื่อมต่อ
   connected,      // เชื่อมต่อแล้ว
-  waiting,        // รออ่านบัตร
-  reading,        // กำลังอ่านบัตร
   error,          // เกิดข้อผิดพลาด
 }
 
-/// บริการจัดการเครื่องอ่านบัตรประชาชน
-/// รองรับการเชื่อมต่อผ่าน USB และการอ่านข้อมูลแบบ Real-time
-class CardReaderService {
+/// สถานะการอ่านบัตร
+enum CardReadingStatus {
+  idle,           // ไม่ได้อ่าน
+  reading,        // กำลังอ่าน
+  success,        // อ่านสำเร็จ
+  failed,         // อ่านไม่สำเร็จ
+  noCard,         // ไม่พบบัตร
+  cardDamaged,    // บัตรเสียหาย
+}
+
+/// ข้อมูลจากบัตรประชาชนไทย
+class ThaiIdCardData {
+  final String cid;
+  final String? titleTH;
+  final String? firstnameTH;
+  final String? lastnameTH;
+  final String? titleEN;
+  final String? firstnameEN;
+  final String? lastnameEN;
+  final String? birthdate;
+  final int? gender; // 1 = ชาย, 2 = หญิง
+  final String? address;
+  final String? issueDate;
+  final String? expireDate;
+  final List<int>? photo;
+  final DateTime readTimestamp;
+
+  ThaiIdCardData({
+    required this.cid,
+    this.titleTH,
+    this.firstnameTH,
+    this.lastnameTH,
+    this.titleEN,
+    this.firstnameEN,
+    this.lastnameEN,
+    this.birthdate,
+    this.gender,
+    this.address,
+    this.issueDate,
+    this.expireDate,
+    this.photo,
+    DateTime? readTimestamp,
+  }) : readTimestamp = readTimestamp ?? DateTime.now();
+
+  /// สร้าง ThaiIdCardData จาก ThaiIDCard
+  factory ThaiIdCardData.fromThaiIDCard(ThaiIDCard card) {
+    return ThaiIdCardData(
+      cid: card.cid ?? '',
+      titleTH: card.titleTH,
+      firstnameTH: card.firstnameTH,
+      lastnameTH: card.lastnameTH,
+      titleEN: card.titleEN,
+      firstnameEN: card.firstnameEN,
+      lastnameEN: card.lastnameEN,
+      birthdate: card.birthdate,
+      gender: card.gender,
+      address: card.address,
+      issueDate: card.issueDate,
+      expireDate: card.expireDate,
+      photo: card.photo,
+      readTimestamp: DateTime.now(),
+    );
+  }
+
+  /// ตรวจสอบความถูกต้องของข้อมูลพื้นฐาน
+  bool get isValid {
+    return cid.isNotEmpty && 
+           cid.length == 13 && 
+           firstnameTH?.isNotEmpty == true &&
+           lastnameTH?.isNotEmpty == true;
+  }
+
+  /// ชื่อเต็มภาษาไทย
+  String get fullNameTH {
+    final parts = [titleTH, firstnameTH, lastnameTH]
+        .where((part) => part?.isNotEmpty == true);
+    return parts.join(' ');
+  }
+
+  /// ชื่อเต็มภาษาอังกฤษ
+  String get fullNameEN {
+    final parts = [titleEN, firstnameEN, lastnameEN]
+        .where((part) => part?.isNotEmpty == true);
+    return parts.join(' ');
+  }
+
+  /// เพศเป็นข้อความ
+  String get genderText {
+    switch (gender) {
+      case 1:
+        return 'ชาย';
+      case 2:
+        return 'หญิง';
+      default:
+        return 'ไม่ระบุ';
+    }
+  }
+}
+
+/// Exception สำหรับเครื่องอ่านบัตร
+class CardReaderException implements Exception {
+  final String message;
+  final String code;
+  final dynamic originalError;
+
+  const CardReaderException(this.message, this.code, [this.originalError]);
+
+  @override
+  String toString() => 'CardReaderException($code): $message';
+}
+
+/// Service สำหรับจัดการเครื่องอ่านบัตรประชาชนไทย
+class CardReaderService extends ChangeNotifier {
   static final CardReaderService _instance = CardReaderService._internal();
   factory CardReaderService() => _instance;
   CardReaderService._internal();
 
-  final StreamController<CardReaderStatus> _statusController = 
-      StreamController<CardReaderStatus>.broadcast();
-  final StreamController<IdCardData> _cardDataController = 
-      StreamController<IdCardData>.broadcast();
-  final StreamController<String> _errorController = 
-      StreamController<String>.broadcast();
+  // สถานะ
+  CardReaderConnectionStatus _connectionStatus = CardReaderConnectionStatus.disconnected;
+  CardReadingStatus _readingStatus = CardReadingStatus.idle;
+  UsbDevice? _currentDevice;
+  String? _lastError;
+  ThaiIdCardData? _lastReadData;
+  
+  // การตั้งค่า
+  Duration _readTimeout = const Duration(seconds: 10);
+  final int _maxRetryAttempts = 3;
+  Duration _retryDelay = const Duration(seconds: 1);
 
-  CardReaderStatus _currentStatus = CardReaderStatus.disconnected;
+  // Streams และ Subscriptions
+  StreamSubscription<UsbDevice>? _deviceStreamSubscription;
+  StreamSubscription? _cardStreamSubscription;
   Timer? _connectionTimer;
-  Process? _readerProcess;
+  Timer? _readTimeoutTimer;
 
-  /// Stream สำหรับติดตามสถานะเครื่องอ่านบัตร
-  Stream<CardReaderStatus> get statusStream => _statusController.stream;
+  // Getters
+  CardReaderConnectionStatus get connectionStatus => _connectionStatus;
+  CardReadingStatus get readingStatus => _readingStatus;
+  UsbDevice? get currentDevice => _currentDevice;
+  String? get lastError => _lastError;
+  ThaiIdCardData? get lastReadData => _lastReadData;
+  bool get isConnected => _connectionStatus == CardReaderConnectionStatus.connected;
+  bool get isReading => _readingStatus == CardReadingStatus.reading;
 
-  /// Stream สำหรับรับข้อมูลบัตรที่อ่านได้
-  Stream<IdCardData> get cardDataStream => _cardDataController.stream;
-
-  /// Stream สำหรับรับข้อความข้อผิดพลาด
-  Stream<String> get errorStream => _errorController.stream;
-
-  /// สถานะปัจจุบันของเครื่องอ่านบัตร
-  CardReaderStatus get currentStatus => _currentStatus;
-
-  /// เริ่มการเชื่อมต่อเครื่องอ่านบัตร
-  Future<bool> initialize() async {
+  /// เริ่มต้นการเชื่อมต่อกับเครื่องอ่านบัตร
+  Future<void> initialize() async {
     try {
-      debugPrint('🔍 กำลังเริ่มต้นเครื่องอ่านบัตรประชาชน...');
+      debugPrint('🔧 CardReaderService: เริ่มต้นการเชื่อมต่อ...');
+      _setConnectionStatus(CardReaderConnectionStatus.connecting);
       
-      // ตรวจสอบระบบปฏิบัติการ
-      if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
-        _setError('ระบบปฏิบัติการไม่รองรับเครื่องอ่านบัตร');
-        return false;
-      }
-
-      _updateStatus(CardReaderStatus.connected);
-
-      // เริ่มตรวจสอบการเชื่อมต่อแบบ interval
-      _startConnectionMonitoring();
-
-      debugPrint('✅ เริ่มต้นเครื่องอ่านบัตรสำเร็จ');
-      return true;
-    } catch (e) {
-      debugPrint('❌ ข้อผิดพลาดในการเริ่มต้นเครื่องอ่านบัตร: $e');
-      _setError('ไม่สามารถเริ่มต้นเครื่องอ่านบัตรได้');
-      return false;
-    }
-  }
-
-  /// เริ่มการอ่านบัตรประชาชน
-  Future<bool> startReading() async {
-    try {
-      if (_currentStatus != CardReaderStatus.connected && 
-          _currentStatus != CardReaderStatus.waiting) {
-        debugPrint('❌ เครื่องอ่านบัตรไม่พร้อมใช้งาน');
-        return false;
-      }
-
-      debugPrint('🔍 กำลังรอการใส่บัตรประชาชน...');
-      _updateStatus(CardReaderStatus.waiting);
-
-      // จำลองการอ่านบัตร (ในการใช้งานจริงจะเชื่อมต่อกับ hardware)
-      if (kDebugMode) {
-        _simulateCardReading();
-      } else {
-        _startActualCardReading();
-      }
-
-      return true;
-    } catch (e) {
-      debugPrint('❌ ข้อผิดพลาดในการเริ่มอ่านบัตร: $e');
-      _setError('ไม่สามารถเริ่มการอ่านบัตรได้');
-      return false;
-    }
-  }
-
-  /// หยุดการอ่านบัตร
-  Future<void> stopReading() async {
-    try {
-      if (_readerProcess != null) {
-        _readerProcess!.kill();
-        _readerProcess = null;
-      }
-
-      _updateStatus(CardReaderStatus.connected);
-      debugPrint('⏹️ หยุดการอ่านบัตรแล้ว');
-    } catch (e) {
-      debugPrint('❌ ข้อผิดพลาดในการหยุดอ่านบัตร: $e');
-    }
-  }
-
-  /// ตัดการเชื่อมต่อเครื่องอ่านบัตร
-  Future<void> disconnect() async {
-    try {
-      _connectionTimer?.cancel();
-      _connectionTimer = null;
-
-      if (_readerProcess != null) {
-        _readerProcess!.kill();
-        _readerProcess = null;
-      }
-
-      _updateStatus(CardReaderStatus.disconnected);
-      debugPrint('🔌 ตัดการเชื่อมต่อเครื่องอ่านบัตรแล้ว');
-    } catch (e) {
-      debugPrint('❌ ข้อผิดพลาดในการตัดการเชื่อมต่อ: $e');
-    }
-  }
-
-  /// จำลองการอ่านบัตร (สำหรับการพัฒนา)
-  void _simulateCardReading() {
-    Timer(const Duration(seconds: 2), () {
-      _updateStatus(CardReaderStatus.reading);
+      // ตั้งค่า timeout ตาม platform
+      _configureTimeouts();
       
-      Timer(const Duration(seconds: 3), () {
-        // จำลองข้อมูลบัตรประชาชน
-        final simulatedData = IdCardData(
-          id: '1234567890123',
-          firstName: 'สมชาย',
-          lastName: 'ใจดี',
-          dateOfBirth: '1990-05-15',
-          address: 'กรุงเทพมหานคร, เขตดุสิต, แขวงดุสิต',
-          gender: 'ชาย',
-          readAt: DateTime.now(),
-        );
-
-        _cardDataController.add(simulatedData);
-        _updateStatus(CardReaderStatus.connected);
-        debugPrint('✅ อ่านบัตรจำลองสำเร็จ: ${simulatedData.id}');
-      });
-    });
-  }
-
-  /// เริ่มการอ่านบัตรจริง (เชื่อมต่อกับ hardware)
-  void _startActualCardReading() async {
-    try {
-      _updateStatus(CardReaderStatus.reading);
-
-      // ในการใช้งานจริง จะใช้ library หรือ executable สำหรับอ่านบัตร
-      // เช่น Thai ID Card Reader SDK หรือ command line tools
+      // เริ่มฟัง USB device events
+      _startListeningToDeviceEvents();
       
-      // ตัวอย่างการใช้ command line (ปรับตามเครื่องอ่านบัตรที่ใช้)
-      if (Platform.isWindows) {
-        _readerProcess = await Process.start(
-          'thailand_id_reader.exe', // executable สำหรับ Windows
-          ['--read', '--format=json'],
-        );
-      } else if (Platform.isLinux) {
-        _readerProcess = await Process.start(
-          'thailand_id_reader', // executable สำหรับ Linux
-          ['--read', '--format=json'],
-        );
-      }
-
-      if (_readerProcess != null) {
-        _readerProcess!.stdout
-            .transform(utf8.decoder)
-            .transform(const LineSplitter())
-            .listen(
-              _parseCardData,
-              onError: (error) => _setError('ข้อผิดพลาดในการอ่านบัตร: $error'),
-            );
-
-        _readerProcess!.stderr
-            .transform(utf8.decoder)
-            .listen((error) => _setError('ข้อผิดพลาดระบบ: $error'));
-      }
+      debugPrint('✅ CardReaderService: เริ่มต้นสำเร็จ');
     } catch (e) {
-      debugPrint('❌ ข้อผิดพลาดในการเริ่มอ่านบัตรจริง: $e');
-      _setError('ไม่สามารถเชื่อมต่อเครื่องอ่านบัตรได้');
+      debugPrint('❌ CardReaderService: เริ่มต้นล้มเหลว - $e');
+      _setError('ไม่สามารถเริ่มต้นเครื่องอ่านบัตรได้', 'INIT_ERROR', e);
     }
   }
 
-  /// แยกวิเคราะห์ข้อมูลจากเครื่องอ่านบัตร
-  void _parseCardData(String rawData) {
-    try {
-      final jsonData = jsonDecode(rawData);
-      
-      if (jsonData['status'] == 'success' && jsonData['data'] != null) {
-        final cardData = IdCardData.fromJson(jsonData['data']);
-        _cardDataController.add(cardData);
-        _updateStatus(CardReaderStatus.connected);
-        debugPrint('✅ อ่านบัตรสำเร็จ: ${cardData.id}');
-      } else if (jsonData['status'] == 'error') {
-        _setError(jsonData['message'] ?? 'ข้อผิดพลาดไม่ทราบสาเหตุ');
-      }
-    } catch (e) {
-      debugPrint('❌ ข้อผิดพลาดในการแยกวิเคราะห์ข้อมูล: $e');
-      _setError('ข้อมูลจากเครื่องอ่านบัตรไม่ถูกต้อง');
+  /// ตั้งค่า timeout ตาม platform
+  void _configureTimeouts() {
+    if (Platform.isAndroid) {
+      _readTimeout = const Duration(seconds: 15); // Android ต้องการเวลานานกว่า
+      _retryDelay = const Duration(seconds: 2);
+    } else {
+      _readTimeout = const Duration(seconds: 10); // Desktop เร็วกว่า
+      _retryDelay = const Duration(seconds: 1);
     }
+    debugPrint('⏱️ CardReaderService: ตั้งค่า timeout = ${_readTimeout.inSeconds}s');
   }
 
-  /// เริ่มตรวจสอบการเชื่อมต่ออย่างต่อเนื่อง
-  void _startConnectionMonitoring() {
-    _connectionTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (timer) => _checkConnection(),
+  /// เริ่มฟัง USB device events
+  void _startListeningToDeviceEvents() {
+    _deviceStreamSubscription?.cancel();
+    _deviceStreamSubscription = ThaiIdcardReaderFlutter.deviceHandlerStream.listen(
+      _onDeviceEvent,
+      onError: _onDeviceError,
     );
   }
 
-  /// ตรวจสอบการเชื่อมต่อเครื่องอ่านบัตร
-  void _checkConnection() async {
-    try {
-      // ในการใช้งานจริงจะตรวจสอบผ่าน USB หรือ driver
-      // สำหรับตอนนี้จำลองว่าเชื่อมต่ออยู่เสมอ
-      if (_currentStatus == CardReaderStatus.disconnected) {
-        _updateStatus(CardReaderStatus.connected);
+  /// จัดการ device events
+  void _onDeviceEvent(UsbDevice device) {
+    debugPrint('📱 CardReaderService: Device event - ${device.productName}');
+    
+    _currentDevice = device;
+    
+    if (device.hasPermission && device.isAttached) {
+      _setConnectionStatus(CardReaderConnectionStatus.connected);
+      _startListeningToCardEvents();
+    } else if (device.isAttached && !device.hasPermission) {
+      _setError('ไม่ได้รับอนุญาตใช้งานเครื่องอ่านบัตร', 'NO_PERMISSION');
+    } else {
+      _setConnectionStatus(CardReaderConnectionStatus.disconnected);
+      _stopListeningToCardEvents();
+    }
+  }
+
+  /// จัดการ device errors
+  void _onDeviceError(dynamic error) {
+    debugPrint('❌ CardReaderService: Device error - $error');
+    _setError('เกิดข้อผิดพลาดในการเชื่อมต่อเครื่องอ่านบัตร', 'DEVICE_ERROR', error);
+  }
+
+  /// เริ่มฟัง card events
+  void _startListeningToCardEvents() {
+    _cardStreamSubscription?.cancel();
+    _cardStreamSubscription = ThaiIdcardReaderFlutter.cardHandlerStream.listen(
+      _onCardEvent,
+      onError: _onCardError,
+    );
+  }
+
+  /// หยุดฟัง card events
+  void _stopListeningToCardEvents() {
+    _cardStreamSubscription?.cancel();
+  }
+
+  /// จัดการ card events
+  void _onCardEvent(dynamic cardEvent) {
+    debugPrint('💳 CardReaderService: Card event - ${cardEvent.isReady}');
+    
+    if (cardEvent.isReady && !isReading) {
+      // บัตรพร้อม - อ่านข้อมูลอัตโนมัติ
+      _performCardRead();
+    } else if (!cardEvent.isReady) {
+      // ไม่พบบัตร
+      _setReadingStatus(CardReadingStatus.noCard);
+    }
+  }
+
+  /// จัดการ card errors
+  void _onCardError(dynamic error) {
+    debugPrint('❌ CardReaderService: Card error - $error');
+    _setReadingStatus(CardReadingStatus.failed);
+  }
+
+  /// อ่านข้อมูลจากบัตรประชาชน (manual trigger)
+  Future<ThaiIdCardData?> readCard({
+    int? retryAttempts,
+    Duration? timeout,
+  }) async {
+    if (!isConnected) {
+      throw const CardReaderException(
+        'เครื่องอ่านบัตรไม่ได้เชื่อมต่อ', 
+        'NOT_CONNECTED'
+      );
+    }
+
+    if (isReading) {
+      throw const CardReaderException(
+        'กำลังอ่านข้อมูลอยู่', 
+        'ALREADY_READING'
+      );
+    }
+
+    final attempts = retryAttempts ?? _maxRetryAttempts;
+    final readTimeout = timeout ?? _readTimeout;
+
+    for (int attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        debugPrint('📖 CardReaderService: พยายามอ่านครั้งที่ $attempt/$attempts');
+        
+        final result = await _performCardRead(timeout: readTimeout);
+        if (result != null) {
+          return result;
+        }
+        
+        // หากไม่สำเร็จและยังมีการพยายามอีก ให้รอสักครู่
+        if (attempt < attempts) {
+          await Future.delayed(_retryDelay);
+        }
+        
+      } catch (e) {
+        debugPrint('❌ CardReaderService: การพยายามครั้งที่ $attempt ล้มเหลว - $e');
+        
+        if (attempt == attempts) {
+          rethrow; // พ้อความพยายามสุดท้ายแล้ว ให้โยน error
+        }
+        
+        await Future.delayed(_retryDelay);
       }
+    }
+
+    throw const CardReaderException(
+      'ไม่สามารถอ่านข้อมูลจากบัตรได้หลังจากพยายามหลายครั้ง',
+      'READ_FAILED'
+    );
+  }
+
+  /// ดำเนินการอ่านบัตร
+  Future<ThaiIdCardData?> _performCardRead({Duration? timeout}) async {
+    _setReadingStatus(CardReadingStatus.reading);
+    _clearError();
+
+    final readTimeout = timeout ?? _readTimeout;
+    
+    try {
+      // ตั้งค่า timeout timer
+      _readTimeoutTimer?.cancel();
+      _readTimeoutTimer = Timer(readTimeout, () {
+        throw const CardReaderException(
+          'หมดเวลาการอ่านบัตร',
+          'READ_TIMEOUT'
+        );
+      });
+
+      // อ่านข้อมูล
+      final result = await ThaiIdcardReaderFlutter.read();
+      _readTimeoutTimer?.cancel();
+
+      if (result.cid == null || result.cid!.isEmpty) {
+        _setReadingStatus(CardReadingStatus.noCard);
+        return null;
+      }
+
+      // แปลงเป็น ThaiIdCardData
+      final cardData = ThaiIdCardData.fromThaiIDCard(result);
+      
+      if (!cardData.isValid) {
+        _setReadingStatus(CardReadingStatus.cardDamaged);
+        throw const CardReaderException(
+          'ข้อมูลในบัตรไม่ถูกต้องหรือไม่สมบูรณ์',
+          'INVALID_CARD_DATA'
+        );
+      }
+
+      // บันทึกข้อมูลล่าสุด
+      _lastReadData = cardData;
+      _setReadingStatus(CardReadingStatus.success);
+      
+      debugPrint('✅ CardReaderService: อ่านบัตรสำเร็จ - ${cardData.fullNameTH}');
+      return cardData;
+      
     } catch (e) {
-      debugPrint('❌ การตรวจสอบการเชื่อมต่อล้มเหลว: $e');
-      _updateStatus(CardReaderStatus.error);
+      _readTimeoutTimer?.cancel();
+      _setReadingStatus(CardReadingStatus.failed);
+      
+      if (e is CardReaderException) {
+        rethrow;
+      } else {
+        throw CardReaderException(
+          'เกิดข้อผิดพลาดในการอ่านบัตร: $e',
+          'READ_ERROR',
+          e,
+        );
+      }
     }
   }
 
-  /// อัปเดตสถานะเครื่องอ่านบัตร
-  void _updateStatus(CardReaderStatus status) {
-    if (_currentStatus != status) {
-      _currentStatus = status;
-      _statusController.add(status);
-      debugPrint('📡 สถานะเครื่องอ่านบัตร: ${_statusToString(status)}');
+  /// รีเซ็ตการเชื่อมต่อ
+  Future<void> resetConnection() async {
+    try {
+      debugPrint('🔄 CardReaderService: รีเซ็ตการเชื่อมต่อ...');
+      
+      _setConnectionStatus(CardReaderConnectionStatus.connecting);
+      
+      // หยุดการฟังทั้งหมด
+      await _stopAllListeners();
+      
+      // รอสักครู่
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // เริ่มต้นใหม่
+      await initialize();
+      
+      debugPrint('✅ CardReaderService: รีเซ็ตสำเร็จ');
+      
+    } catch (e) {
+      debugPrint('❌ CardReaderService: รีเซ็ตล้มเหลว - $e');
+      _setError('ไม่สามารถรีเซ็ตการเชื่อมต่อได้', 'RESET_ERROR', e);
     }
   }
 
-  /// ส่งข้อความข้อผิดพลาด
-  void _setError(String message) {
-    _updateStatus(CardReaderStatus.error);
-    _errorController.add(message);
-    debugPrint('❌ ข้อผิดพลาดเครื่องอ่านบัตร: $message');
+  /// ตรวจสอบสถานะการเชื่อมต่อ
+  Future<bool> checkConnection() async {
+    try {
+      // ตรวจสอบ device
+      if (_currentDevice == null || !_currentDevice!.isAttached) {
+        _setConnectionStatus(CardReaderConnectionStatus.disconnected);
+        return false;
+      }
+      
+      if (!_currentDevice!.hasPermission) {
+        _setConnectionStatus(CardReaderConnectionStatus.error);
+        return false;
+      }
+      
+      _setConnectionStatus(CardReaderConnectionStatus.connected);
+      return true;
+      
+    } catch (e) {
+      debugPrint('❌ CardReaderService: เช็คการเชื่อมต่อล้มเหลว - $e');
+      _setConnectionStatus(CardReaderConnectionStatus.error);
+      return false;
+    }
   }
 
-  /// แปลงสถานะเป็นข้อความ
-  String _statusToString(CardReaderStatus status) {
-    switch (status) {
-      case CardReaderStatus.disconnected:
-        return 'ไม่ได้เชื่อมต่อ';
-      case CardReaderStatus.connected:
-        return 'เชื่อมต่อแล้ว';
-      case CardReaderStatus.waiting:
-        return 'รออ่านบัตร';
-      case CardReaderStatus.reading:
-        return 'กำลังอ่านบัตร';
-      case CardReaderStatus.error:
-        return 'เกิดข้อผิดพลาด';
+  /// หยุดการทำงานทั้งหมด
+  Future<void> _stopAllListeners() async {
+    _deviceStreamSubscription?.cancel();
+    _cardStreamSubscription?.cancel();
+    _connectionTimer?.cancel();
+    _readTimeoutTimer?.cancel();
+  }
+
+  /// ตั้งค่าสถานะการเชื่อมต่อ
+  void _setConnectionStatus(CardReaderConnectionStatus status) {
+    if (_connectionStatus != status) {
+      _connectionStatus = status;
+      notifyListeners();
+      debugPrint('🔗 CardReaderService: Connection status = $status');
+    }
+  }
+
+  /// ตั้งค่าสถานะการอ่าน
+  void _setReadingStatus(CardReadingStatus status) {
+    if (_readingStatus != status) {
+      _readingStatus = status;
+      notifyListeners();
+      debugPrint('📖 CardReaderService: Reading status = $status');
+    }
+  }
+
+  /// ตั้งค่า error
+  void _setError(String message, String code, [dynamic originalError]) {
+    _lastError = message;
+    _setConnectionStatus(CardReaderConnectionStatus.error);
+    notifyListeners();
+    
+    debugPrint('❌ CardReaderService: Error($code) = $message');
+    if (originalError != null) {
+      debugPrint('   Original: $originalError');
+    }
+  }
+
+  /// ล้าง error
+  void _clearError() {
+    if (_lastError != null) {
+      _lastError = null;
+      notifyListeners();
     }
   }
 
   /// ทำความสะอาดทรัพยากร
+  @override
   void dispose() {
-    _connectionTimer?.cancel();
-    _readerProcess?.kill();
-    _statusController.close();
-    _cardDataController.close();
-    _errorController.close();
+    debugPrint('🧹 CardReaderService: Disposing...');
+    _stopAllListeners();
+    super.dispose();
+  }
+
+  /// รายงานสถิติการใช้งาน
+  Map<String, dynamic> getUsageStats() {
+    return {
+      'connectionStatus': _connectionStatus.name,
+      'readingStatus': _readingStatus.name,
+      'hasDevice': _currentDevice != null,
+      'deviceName': _currentDevice?.productName,
+      'lastReadTime': _lastReadData?.readTimestamp.toIso8601String(),
+      'lastError': _lastError,
+    };
   }
 }

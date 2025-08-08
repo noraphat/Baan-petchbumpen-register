@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/summary_service.dart';
 import '../services/booking_service.dart';
+import '../models/room_model.dart';
 
 class DailySummaryScreen extends StatefulWidget {
   const DailySummaryScreen({super.key});
@@ -1122,7 +1123,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
       return _buildEmptyRoomState();
     }
 
-    final isSingleDay = _roomSummary!.first.isSingleDay;
+    final isSingleDay = _selectedPeriod == 'today';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1209,7 +1210,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
                   child: _buildStatCard(
                     'ห้องที่มีการใช้งาน',
                     _roomSummary!
-                        .where((r) => r.usageDays > 0)
+                        .where((r) => r.usageDays.toInt() > 0)
                         .length
                         .toString(),
                     Icons.check_circle,
@@ -1343,7 +1344,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
       final dateRange = _getDateRange();
       final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
       final usagePercentage = totalDays > 0
-          ? (summary.usageDays / totalDays * 100).round()
+          ? (summary.usageDays.toInt() / totalDays * 100).round()
           : 0;
 
       return DataRow(
@@ -1357,10 +1358,10 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
           DataCell(Text(summary.roomSize)),
           DataCell(
             Text(
-              '${summary.usageDays} วัน',
+              '${summary.usageDays.toInt()} วัน',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: summary.usageDays > 0
+                color: summary.usageDays.toInt() > 0
                     ? Colors.green[700]
                     : Colors.grey[600],
               ),
@@ -1409,10 +1410,12 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
     final dateRange = _getDateRange();
     final totalDays = dateRange.end.difference(dateRange.start).inDays + 1;
     final totalRooms = _roomSummary!.length;
-    final occupiedRooms = _roomSummary!.where((s) => s.usageDays > 0).length;
+    final occupiedRooms = _roomSummary!
+        .where((s) => s.usageDays.toInt() > 0)
+        .length;
     final totalUsageDays = _roomSummary!.fold<int>(
       0,
-      (sum, s) => sum + s.usageDays,
+      (sum, s) => sum + s.usageDays.toInt(),
     );
     final averageUsage = totalRooms > 0
         ? (totalUsageDays / (totalRooms * totalDays) * 100).round()
@@ -1502,7 +1505,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
     final totalRooms = _roomSummary!.length;
     final totalUsageDays = _roomSummary!.fold<int>(
       0,
-      (sum, s) => sum + s.usageDays,
+      (sum, s) => sum + s.usageDays.toInt(),
     );
 
     return totalRooms > 0 && totalDays > 0

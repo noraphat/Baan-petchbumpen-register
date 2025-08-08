@@ -193,11 +193,13 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
     final checkOutDate = DateTime.parse(booking['check_out_date']);
     final roomName = booking['room_name'] ?? 'ไม่ระบุ';
     final bookingId = booking['id'];
-    
+
     // ตรวจสอบว่าผู้ปฏิบัติธรรมเข้าพักมาแล้วหรือไม่
     final today = DateTime.now();
     final todayOnly = DateTime(today.year, today.month, today.day);
-    final hasCheckedIn = todayOnly.isAfter(checkInDate) || todayOnly.isAtSameMomentAs(checkInDate);
+    final hasCheckedIn =
+        todayOnly.isAfter(checkInDate) ||
+        todayOnly.isAtSameMomentAs(checkInDate);
 
     return Card(
       margin: EdgeInsets.only(bottom: 8),
@@ -332,10 +334,7 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
             children: [
               Icon(Icons.cancel, size: 18, color: Colors.red),
               SizedBox(width: 8),
-              Text(
-                'ยกเลิกการจอง',
-                style: TextStyle(color: Colors.red),
-              ),
+              Text('ยกเลิกการจอง', style: TextStyle(color: Colors.red)),
             ],
           ),
         ),
@@ -389,7 +388,11 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.info_outline, color: Colors.orange[700], size: 20),
+                          Icon(
+                            Icons.info_outline,
+                            color: Colors.orange[700],
+                            size: 20,
+                          ),
                           SizedBox(width: 8),
                           Text(
                             'ข้อกำหนด:',
@@ -403,7 +406,10 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
                       SizedBox(height: 4),
                       Text(
                         '• วันที่เข้าพักต้องไม่น้อยกว่าวันปัจจุบัน\n• ต้องอยู่ในช่วงเวลาปฏิบัติธรรม\n• ไม่ขัดแย้งกับการจองอื่น',
-                        style: TextStyle(fontSize: 12, color: Colors.orange[700]),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.orange[700],
+                        ),
                       ),
                     ],
                   ),
@@ -414,12 +420,15 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
                 CalendarDatePicker(
                   initialDate: newCheckInDate ?? todayOnly,
                   firstDate: todayOnly,
-                  lastDate: widget.practiceInfo?.endDate ?? DateTime.now().add(Duration(days: 365)),
+                  lastDate:
+                      widget.practiceInfo?.endDate ??
+                      DateTime.now().add(Duration(days: 365)),
                   onDateChanged: (date) {
                     setState(() {
                       newCheckInDate = date;
                       // ถ้าวันที่ออกน้อยกว่าวันที่เข้าใหม่ ให้ปรับวันที่ออก
-                      if (newCheckOutDate != null && newCheckOutDate!.isBefore(date)) {
+                      if (newCheckOutDate != null &&
+                          newCheckOutDate!.isBefore(date)) {
                         newCheckOutDate = date.add(Duration(days: 1));
                       }
                     });
@@ -429,9 +438,16 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
                 Text('เลือกวันที่ออกใหม่:'),
                 SizedBox(height: 8),
                 CalendarDatePicker(
-                  initialDate: newCheckOutDate ?? (newCheckInDate?.add(Duration(days: 1)) ?? todayOnly.add(Duration(days: 1))),
-                  firstDate: (newCheckInDate ?? todayOnly).add(Duration(days: 1)),
-                  lastDate: widget.practiceInfo?.endDate ?? DateTime.now().add(Duration(days: 365)),
+                  initialDate:
+                      newCheckOutDate ??
+                      (newCheckInDate?.add(Duration(days: 1)) ??
+                          todayOnly.add(Duration(days: 1))),
+                  firstDate: (newCheckInDate ?? todayOnly).add(
+                    Duration(days: 1),
+                  ),
+                  lastDate:
+                      widget.practiceInfo?.endDate ??
+                      DateTime.now().add(Duration(days: 365)),
                   onDateChanged: (date) {
                     setState(() {
                       newCheckOutDate = date;
@@ -450,7 +466,11 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
               onPressed: () async {
                 if (newCheckInDate != null && newCheckOutDate != null) {
                   Navigator.of(context).pop();
-                  await _updateBookingDates(bookingId, newCheckInDate!, newCheckOutDate!);
+                  await _updateBookingDates(
+                    bookingId,
+                    newCheckInDate!,
+                    newCheckOutDate!,
+                  );
                 }
               },
               child: Text('บันทึก'),
@@ -527,11 +547,13 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
 
     if (!mounted) return;
 
-    if (!validation.isValid) {
+    if (!validation) {
       // แสดงข้อความ error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(validation.errorMessage!),
+          content: Text(
+            'ไม่สามารถยกเลิกการจองได้ อนุญาตให้ยกเลิกได้เฉพาะวันที่เช็คอินเท่านั้น',
+          ),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 5),
         ),
@@ -601,16 +623,17 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
     DateTime newCheckOutDate,
   ) async {
     try {
-      final validation = await _bookingService.updateRoomBookingDatesWithValidation(
-        bookingId: bookingId,
-        newCheckInDate: newCheckInDate,
-        newCheckOutDate: newCheckOutDate,
-        visitorId: widget.visitorId,
-      );
+      final validation = await _bookingService
+          .updateRoomBookingDatesWithValidation(
+            bookingId: bookingId,
+            newCheckInDate: newCheckInDate,
+            newCheckOutDate: newCheckOutDate,
+            visitorId: widget.visitorId,
+          );
 
       if (!mounted) return;
 
-      if (validation.isValid) {
+      if (validation) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('อัพเดตการจองห้องพักสำเร็จ'),
@@ -622,7 +645,7 @@ class _BookingInfoWidgetState extends State<BookingInfoWidget> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(validation.errorMessage ?? 'ไม่สามารถอัพเดตได้'),
+            content: Text('ไม่สามารถอัพเดตได้ เนื่องจากมีช่วงเวลาซ้อนทับ'),
             backgroundColor: Colors.red,
             duration: Duration(seconds: 5),
           ),

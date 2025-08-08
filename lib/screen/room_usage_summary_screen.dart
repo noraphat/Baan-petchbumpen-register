@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/booking_service.dart';
+import '../models/room_model.dart';
 
 /// หน้าจอสรุปผลประจำวันสำหรับห้องพัก
 class RoomUsageSummaryScreen extends StatefulWidget {

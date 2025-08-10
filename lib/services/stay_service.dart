@@ -11,8 +11,8 @@ class StayService {
 
 
   /// Get the latest stay record for a visitor with prioritization:
-  /// 1. Active stays first (status='active')
-  /// 2. Then by latest created_at timestamp
+  /// 1. Current stays that haven't ended yet (end_date >= today AND status='active')
+  /// 2. Then latest stays by created_at timestamp
   /// 
   /// This implements the core requirement for unified registration logic
   static Future<StayRecord?> getLatestStay(String visitorId) async {
@@ -20,14 +20,21 @@ class StayService {
     final db = await dbHelper.db;
 
     try {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final todayStr = today.toIso8601String().split('T')[0]; // YYYY-MM-DD format
+
       final result = await db.rawQuery('''
         SELECT * FROM stays
         WHERE visitor_id = ?
         ORDER BY 
-          (CASE WHEN status='active' THEN 0 ELSE 1 END),
+          (CASE 
+            WHEN status='active' AND date(end_date) >= date(?) THEN 0 
+            ELSE 1 
+          END),
           datetime(created_at) DESC
         LIMIT 1
-      ''', [visitorId]);
+      ''', [visitorId, todayStr]);
 
       if (result.isNotEmpty) {
         return StayRecord.fromMap(result.first);

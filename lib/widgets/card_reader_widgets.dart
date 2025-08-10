@@ -76,6 +76,9 @@ class ConnectionStatusWidget extends StatelessWidget {
                               color: Colors.red.shade700,
                               fontSize: 13,
                             ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 3,
+                            softWrap: true,
                           ),
                         ),
                       ],
@@ -331,6 +334,9 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
                   color: Colors.grey[600],
                   fontStyle: FontStyle.italic,
                 ),
+                softWrap: true,
+                maxLines: 2,
+                overflow: TextOverflow.visible,
               ),
             ],
           ],
@@ -404,22 +410,28 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
             Text('ไม่สามารถอ่านบัตรได้'),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('เกิดข้อผิดพลาด: $errorMessage'),
-            const SizedBox(height: 16),
-            const Text(
-              'กรุณาตรวจสอบ:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text('• บัตรประชาชนเสียบอยู่ในเครื่องอ่านบัตร'),
-            const Text('• บัตรไม่ชำรุดหรือสกปรก'),
-            const Text('• เครื่องอ่านบัตรเชื่อมต่ออยู่'),
-            const Text('• ลองถอดและเสียบบัตรใหม่อีกครั้ง'),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'เกิดข้อผิดพลาด: $errorMessage',
+                style: const TextStyle(fontSize: 14),
+                softWrap: true,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'กรุณาตรวจสอบ:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text('• บัตรประชาชนเสียบอยู่ในเครื่องอ่านบัตร'),
+              const Text('• บัตรไม่ชำรุดหรือสกปรก'),
+              const Text('• เครื่องอ่านบัตรเชื่อมต่ออยู่'),
+              const Text('• ลองถอดและเสียบบัตรใหม่อีกครั้ง'),
+            ],
+          ),
         ),
         actions: [
           TextButton(

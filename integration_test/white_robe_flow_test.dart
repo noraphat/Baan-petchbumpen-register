@@ -12,7 +12,7 @@ void main() {
     setUp(() async {
       // Clear database and create test data
       await DbHelper().clearAllData();
-      
+
       // Create test user
       final testUser = RegData.manual(
         id: '1234567890123',
@@ -26,7 +26,9 @@ void main() {
       await DbHelper().insert(testUser);
     });
 
-    testWidgets('should complete white robe distribution flow', (WidgetTester tester) async {
+    testWidgets('should complete white robe distribution flow', (
+      WidgetTester tester,
+    ) async {
       // Launch app
       app.main();
       await tester.pumpAndSettle();
@@ -37,10 +39,10 @@ void main() {
 
       // Simulate QR code scan by entering ID manually
       await tester.enterText(
-        find.byKey(const Key('qr_input_field')), 
-        '1234567890123'
+        find.byKey(const Key('qr_input_field')),
+        '1234567890123',
       );
-      
+
       // Tap scan/search button
       await tester.tap(find.byKey(const Key('scan_button')));
       await tester.pumpAndSettle();
@@ -72,10 +74,10 @@ void main() {
 
       // Enter invalid ID
       await tester.enterText(
-        find.byKey(const Key('qr_input_field')), 
-        '9999999999999'
+        find.byKey(const Key('qr_input_field')),
+        '9999999999999',
       );
-      
+
       await tester.tap(find.byKey(const Key('scan_button')));
       await tester.pumpAndSettle();
 
@@ -87,7 +89,9 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('should validate Thai National ID format', (WidgetTester tester) async {
+    testWidgets('should validate Thai National ID format', (
+      WidgetTester tester,
+    ) async {
       // Launch app
       app.main();
       await tester.pumpAndSettle();
@@ -98,21 +102,23 @@ void main() {
 
       // Enter invalid format ID
       await tester.enterText(
-        find.byKey(const Key('qr_input_field')), 
-        '123456789'
+        find.byKey(const Key('qr_input_field')),
+        '123456789',
       );
-      
+
       await tester.tap(find.byKey(const Key('scan_button')));
       await tester.pumpAndSettle();
 
       // Verify validation error
       expect(
-        find.textContaining('รูปแบบหมายเลขบัตรประชาชนไม่ถูกต้อง'), 
-        findsOneWidget
+        find.textContaining('รูปแบบหมายเลขบัตรประชาชนไม่ถูกต้อง'),
+        findsOneWidget,
       );
     });
 
-    testWidgets('should handle camera permission and QR scanning', (WidgetTester tester) async {
+    testWidgets('should handle camera permission and QR scanning', (
+      WidgetTester tester,
+    ) async {
       // Launch app
       app.main();
       await tester.pumpAndSettle();
@@ -126,13 +132,12 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify camera view is displayed or permission dialog
-      expect(
-        find.byType(MobileScanner).or(find.textContaining('Camera permission')), 
-        findsOneWidget
-      );
+      expect(find.textContaining('Camera permission'), findsOneWidget);
     });
 
-    testWidgets('should display user history after approval', (WidgetTester tester) async {
+    testWidgets('should display user history after approval', (
+      WidgetTester tester,
+    ) async {
       // Create additional info for test user
       final additionalInfo = RegAdditionalInfo.create(
         regId: '1234567890123',
@@ -151,10 +156,10 @@ void main() {
       // Navigate and scan
       await tester.tap(find.text('เบิกชุดขาว'));
       await tester.pumpAndSettle();
-      
+
       await tester.enterText(
-        find.byKey(const Key('qr_input_field')), 
-        '1234567890123'
+        find.byKey(const Key('qr_input_field')),
+        '1234567890123',
       );
       await tester.tap(find.byKey(const Key('scan_button')));
       await tester.pumpAndSettle();
@@ -165,7 +170,9 @@ void main() {
       expect(find.textContaining('เสื่อ: 1'), findsOneWidget);
     });
 
-    testWidgets('should handle multiple scan attempts', (WidgetTester tester) async {
+    testWidgets('should handle multiple scan attempts', (
+      WidgetTester tester,
+    ) async {
       // Launch app
       app.main();
       await tester.pumpAndSettle();
@@ -176,8 +183,8 @@ void main() {
 
       // First scan - valid ID
       await tester.enterText(
-        find.byKey(const Key('qr_input_field')), 
-        '1234567890123'
+        find.byKey(const Key('qr_input_field')),
+        '1234567890123',
       );
       await tester.tap(find.byKey(const Key('scan_button')));
       await tester.pumpAndSettle();
@@ -189,15 +196,12 @@ void main() {
       await tester.pumpAndSettle();
 
       // Clear field for next scan
-      await tester.enterText(
-        find.byKey(const Key('qr_input_field')), 
-        ''
-      );
+      await tester.enterText(find.byKey(const Key('qr_input_field')), '');
 
       // Second scan - same ID (should still work)
       await tester.enterText(
-        find.byKey(const Key('qr_input_field')), 
-        '1234567890123'
+        find.byKey(const Key('qr_input_field')),
+        '1234567890123',
       );
       await tester.tap(find.byKey(const Key('scan_button')));
       await tester.pumpAndSettle();

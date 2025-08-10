@@ -3,7 +3,7 @@ import '../../models/reg_data.dart';
 import '../../services/registration_service.dart';
 import '../../services/card_reader_service.dart';
 import '../../widgets/card_reader_widgets.dart';
-import '../../widgets/registration_dialog.dart';
+import '../../widgets/shared_registration_dialog.dart';
 
 /// Enhanced version ของ CaptureForm ที่ใช้ CardReaderService
 class EnhancedCaptureForm extends StatefulWidget {
@@ -290,10 +290,12 @@ class _EnhancedCaptureFormState extends State<EnhancedCaptureForm>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => RegistrationDialog(
-        regData: regData,
-        isFirstTime: isFirstTime,
-        onCompleted: (additionalInfo) {
+      builder: (ctx) => SharedRegistrationDialog(
+        regId: regData.id,
+        existingInfo: null, // ID Card registration มักเป็นใหม่
+        latestStay: null, // ID Card registration มักเป็นใหม่
+        canCreateNew: true, // สร้างใหม่เสมอ
+        onCompleted: () {
           Navigator.pop(ctx); // ปิด registration dialog
           Navigator.pop(context); // กลับไปหน้าเมนู
 

@@ -6,7 +6,7 @@ import 'dart:async';
 import '../../models/reg_data.dart';
 import '../../services/registration_service.dart';
 import '../../services/stay_service.dart';
-import '../../widgets/unified_registration_dialog.dart';
+import '../../widgets/shared_registration_dialog.dart';
 
 /// Unified ID card registration form that uses the new service architecture
 /// This implements the core requirement for unified registration logic
@@ -397,12 +397,12 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => UnifiedRegistrationDialog(
-        regData: regData,
-        isEditMode: isEditMode,
-        existingStay: existingStay,
-        existingAdditionalInfo: existingAdditionalInfo,
-        onCompleted: (additionalInfo) {
+      builder: (ctx) => SharedRegistrationDialog(
+        regId: regData.id,
+        existingInfo: existingAdditionalInfo,
+        latestStay: existingStay,
+        canCreateNew: !isEditMode, // ถ้า editMode=true แสดงว่าแก้ไข, ถ้าไม่ใช่ก็สร้างใหม่
+        onCompleted: () {
           Navigator.pop(ctx); // Close registration dialog
           Navigator.pop(context); // Return to menu
           

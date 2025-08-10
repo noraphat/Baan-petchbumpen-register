@@ -5,11 +5,8 @@ import '../services/card_reader_service.dart';
 /// Widget สำหรับแสดงสถานะการเชื่อมต่อเครื่องอ่านบัตร
 class ConnectionStatusWidget extends StatelessWidget {
   final CardReaderService cardReaderService;
-  
-  const ConnectionStatusWidget({
-    super.key,
-    required this.cardReaderService,
-  });
+
+  const ConnectionStatusWidget({super.key, required this.cardReaderService});
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +15,7 @@ class ConnectionStatusWidget extends StatelessWidget {
       builder: (context, child) {
         final status = cardReaderService.connectionStatus;
         final device = cardReaderService.currentDevice;
-        
+
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -51,7 +48,7 @@ class ConnectionStatusWidget extends StatelessWidget {
                     ),
                   ],
                 ),
-                
+
                 // แสดงข้อผิดพลาด
                 if (cardReaderService.lastError != null) ...[
                   const SizedBox(height: 12),
@@ -65,9 +62,11 @@ class ConnectionStatusWidget extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.error_outline, 
-                             color: Colors.red.shade600, 
-                             size: 20),
+                        Icon(
+                          Icons.error_outline,
+                          color: Colors.red.shade600,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -125,10 +124,13 @@ class ConnectionStatusWidget extends StatelessWidget {
     }
   }
 
-  String _getStatusSubtitle(CardReaderConnectionStatus status, UsbDevice? device) {
+  String _getStatusSubtitle(
+    CardReaderConnectionStatus status,
+    UsbDevice? device,
+  ) {
     switch (status) {
       case CardReaderConnectionStatus.connected:
-        return device != null 
+        return device != null
             ? '${device.manufacturerName} ${device.productName}'
             : 'เครื่องอ่านบัตรพร้อมใช้งาน';
       case CardReaderConnectionStatus.connecting:
@@ -145,11 +147,8 @@ class ConnectionStatusWidget extends StatelessWidget {
 /// Widget สำหรับแสดงสถานะการอ่านบัตร
 class CardReadingStatusWidget extends StatelessWidget {
   final CardReaderService cardReaderService;
-  
-  const CardReadingStatusWidget({
-    super.key,
-    required this.cardReaderService,
-  });
+
+  const CardReadingStatusWidget({super.key, required this.cardReaderService});
 
   @override
   Widget build(BuildContext context) {
@@ -157,11 +156,11 @@ class CardReadingStatusWidget extends StatelessWidget {
       animation: cardReaderService,
       builder: (context, child) {
         final readingStatus = cardReaderService.readingStatus;
-        
+
         if (readingStatus == CardReadingStatus.idle) {
           return const SizedBox.shrink();
         }
-        
+
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -182,10 +181,7 @@ class CardReadingStatusWidget extends StatelessWidget {
                       ),
                       Text(
                         _getReadingSubtitle(readingStatus),
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                     ],
                   ),
@@ -211,7 +207,11 @@ class CardReadingStatusWidget extends StatelessWidget {
       case CardReadingStatus.failed:
         return const Icon(Icons.error, color: Colors.red, size: 24);
       case CardReadingStatus.noCard:
-        return const Icon(Icons.credit_card_off, color: Colors.orange, size: 24);
+        return const Icon(
+          Icons.credit_card_off,
+          color: Colors.orange,
+          size: 24,
+        );
       case CardReadingStatus.cardDamaged:
         return const Icon(Icons.warning, color: Colors.amber, size: 24);
       case CardReadingStatus.idle:
@@ -262,7 +262,7 @@ class RecheckCardButton extends StatefulWidget {
   final CardReaderService cardReaderService;
   final Function(ThaiIdCardData)? onCardRead;
   final Function(String)? onError;
-  
+
   const RecheckCardButton({
     super.key,
     required this.cardReaderService,
@@ -283,8 +283,9 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
       animation: widget.cardReaderService,
       builder: (context, child) {
         final isConnected = widget.cardReaderService.isConnected;
-        final isReading = widget.cardReaderService.isReading || _isRecheckingManually;
-        
+        final isReading =
+            widget.cardReaderService.isReading || _isRecheckingManually;
+
         return Column(
           children: [
             // ปุ่มหลัก
@@ -292,22 +293,24 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: (isConnected && !isReading) ? _recheckCard : null,
-                icon: _isRecheckingManually 
+                icon: _isRecheckingManually
                     ? const SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : const Icon(Icons.refresh),
                 label: Text(
-                  _isRecheckingManually 
-                      ? 'กำลังตรวจสอบ...' 
+                  _isRecheckingManually
+                      ? 'กำลังตรวจสอบ...'
                       : 'ตรวจสอบบัตรอีกครั้ง',
                   style: const TextStyle(
-                    fontSize: 16, 
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -322,7 +325,7 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
                 ),
               ),
             ),
-            
+
             // ข้อความคำแนะนำ
             if (isConnected && !isReading) ...[
               const SizedBox(height: 8),
@@ -355,7 +358,7 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
     try {
       // ลองอ่านบัตร
       final cardData = await widget.cardReaderService.readCard();
-      
+
       if (cardData != null) {
         // แสดงข้อความสำเร็จ
         if (mounted) {
@@ -373,23 +376,21 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
             ),
           );
         }
-        
+
         // เรียก callback
         widget.onCardRead?.call(cardData);
       }
-      
     } catch (e) {
       // จัดการ error
-      final errorMessage = e is CardReaderException 
-          ? e.message 
+      final errorMessage = e is CardReaderException
+          ? e.message
           : 'เกิดข้อผิดพลาดในการอ่านบัตร: $e';
-      
+
       widget.onError?.call(errorMessage);
-      
+
       if (mounted) {
         _showRecheckErrorDialog(errorMessage);
       }
-      
     } finally {
       if (mounted) {
         setState(() {
@@ -399,15 +400,45 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
     }
   }
 
+  String _getUserFriendlyErrorMessage(String errorMessage) {
+    // แปลงข้อความ error ให้เป็นมิตรกับผู้ใช้
+    if (errorMessage.contains('FormatException')) {
+      return 'ข้อมูลบัตรประชาชนไม่ถูกต้อง กรุณาตรวจสอบบัตร';
+    } else if (errorMessage.contains('timeout') ||
+        errorMessage.contains('Timeout')) {
+      return 'การอ่านบัตรใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง';
+    } else if (errorMessage.contains('connection') ||
+        errorMessage.contains('Connection')) {
+      return 'ไม่สามารถเชื่อมต่อกับเครื่องอ่านบัตรได้';
+    } else if (errorMessage.contains('permission') ||
+        errorMessage.contains('Permission')) {
+      return 'ไม่มีสิทธิ์ในการเข้าถึงเครื่องอ่านบัตร';
+    } else if (errorMessage.contains('device') ||
+        errorMessage.contains('Device')) {
+      return 'ไม่พบเครื่องอ่านบัตร กรุณาตรวจสอบการเชื่อมต่อ';
+    } else if (errorMessage.contains('card') || errorMessage.contains('Card')) {
+      return 'ไม่สามารถอ่านข้อมูลจากบัตรได้ กรุณาตรวจสอบบัตร';
+    } else {
+      return 'เกิดข้อผิดพลาดในการอ่านบัตร กรุณาลองใหม่อีกครั้ง';
+    }
+  }
+
   void _showRecheckErrorDialog(String errorMessage) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.error_outline, color: Colors.red, size: 24),
-            SizedBox(width: 8),
-            Text('ไม่สามารถอ่านบัตรได้'),
+            const Icon(Icons.error_outline, color: Colors.red, size: 24),
+            const SizedBox(width: 8),
+            const Flexible(
+              child: Text(
+                'ไม่สามารถอ่านบัตรได้',
+                style: TextStyle(fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
           ],
         ),
         content: SingleChildScrollView(
@@ -416,7 +447,7 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'เกิดข้อผิดพลาด: $errorMessage',
+                _getUserFriendlyErrorMessage(errorMessage),
                 style: const TextStyle(fontSize: 14),
                 softWrap: true,
               ),
@@ -461,11 +492,8 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
 /// Widget สำหรับแสดงข้อมูลบัตรที่อ่านได้
 class CardDataDisplayWidget extends StatelessWidget {
   final ThaiIdCardData cardData;
-  
-  const CardDataDisplayWidget({
-    super.key,
-    required this.cardData,
-  });
+
+  const CardDataDisplayWidget({super.key, required this.cardData});
 
   @override
   Widget build(BuildContext context) {
@@ -492,7 +520,7 @@ class CardDataDisplayWidget extends StatelessWidget {
               ],
             ),
             const Divider(),
-            
+
             // ข้อมูลพื้นฐาน
             _buildInfoRow('เลขบัตร', cardData.cid),
             _buildInfoRow('ชื่อ-นามสกุล (ไทย)', cardData.fullNameTH),
@@ -503,9 +531,9 @@ class CardDataDisplayWidget extends StatelessWidget {
               _buildInfoRow('วันเกิด', cardData.birthdate!),
             if (cardData.address != null)
               _buildInfoRow('ที่อยู่', cardData.address!),
-              
+
             const SizedBox(height: 12),
-            
+
             // เวลาที่อ่านบัตร
             Container(
               padding: const EdgeInsets.all(8),
@@ -515,14 +543,15 @@ class CardDataDisplayWidget extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.access_time, size: 16, color: Colors.blue.shade600),
+                  Icon(
+                    Icons.access_time,
+                    size: 16,
+                    color: Colors.blue.shade600,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     'อ่านเมื่อ: ${_formatDateTime(cardData.readTimestamp)}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.blue.shade600,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.blue.shade600),
                   ),
                 ],
               ),
@@ -547,10 +576,7 @@ class CardDataDisplayWidget extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: SelectableText(
-              value,
-              style: const TextStyle(fontSize: 16),
-            ),
+            child: SelectableText(value, style: const TextStyle(fontSize: 16)),
           ),
         ],
       ),
@@ -559,9 +585,9 @@ class CardDataDisplayWidget extends StatelessWidget {
 
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.day.toString().padLeft(2, '0')}/'
-           '${dateTime.month.toString().padLeft(2, '0')}/'
-           '${dateTime.year} '
-           '${dateTime.hour.toString().padLeft(2, '0')}:'
-           '${dateTime.minute.toString().padLeft(2, '0')}';
+        '${dateTime.month.toString().padLeft(2, '0')}/'
+        '${dateTime.year} '
+        '${dateTime.hour.toString().padLeft(2, '0')}:'
+        '${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }

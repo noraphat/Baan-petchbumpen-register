@@ -52,6 +52,12 @@ dev_dependencies:
     sdk: flutter
   integration_test:
     sdk: flutter
+  flutter_launcher_icons: ^0.13.1
+
+flutter_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/Baanphetbamphen_Meditation_Retreat_Logo.png"
 
   # Testing utilities
   mockito: ^5.4.4

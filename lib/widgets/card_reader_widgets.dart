@@ -428,15 +428,15 @@ class _RecheckCardButtonState extends State<RecheckCardButton> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 24),
+            const Icon(Icons.error_outline, color: Colors.red, size: 20),
             const SizedBox(width: 8),
-            const Flexible(
+            const Expanded(
               child: Text(
-                'ไม่สามารถอ่านบัตรได้',
+                'อ่านบัตรไม่สำเร็จ',
                 style: TextStyle(fontSize: 16),
                 overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
           ],

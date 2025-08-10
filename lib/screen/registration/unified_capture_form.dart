@@ -157,11 +157,18 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.error_outline, color: Colors.red, size: 24),
-            SizedBox(width: 8),
-            Text('ไม่สามารถอ่านบัตรได้'),
+            const Icon(Icons.error_outline, color: Colors.red, size: 20),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'อ่านบัตรไม่สำเร็จ',
+                style: TextStyle(fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
           ],
         ),
         content: Column(

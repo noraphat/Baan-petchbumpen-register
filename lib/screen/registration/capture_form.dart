@@ -180,9 +180,16 @@ class _CaptureFormState extends State<CaptureForm> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 24),
+            const Icon(Icons.error_outline, color: Colors.red, size: 20),
             const SizedBox(width: 8),
-            const Text('ไม่สามารถอ่านบัตรได้'),
+            const Expanded(
+              child: Text(
+                'อ่านบัตรไม่สำเร็จ',
+                style: TextStyle(fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
           ],
         ),
         content: Column(

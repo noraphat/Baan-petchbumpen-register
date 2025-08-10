@@ -6,6 +6,7 @@ import 'dart:async';
 import '../../models/reg_data.dart';
 import '../../services/registration_service.dart';
 import '../../services/enhanced_card_reader_service.dart';
+import '../../services/db_helper.dart';
 import '../../widgets/shared_registration_dialog.dart';
 
 class CaptureForm extends StatefulWidget {
@@ -468,30 +469,77 @@ class _CaptureFormState extends State<CaptureForm> {
     );
   }
 
-  /// แสดง Dialog การลงทะเบียน
-  void _showRegistrationDialog(RegData regData, {required bool isFirstTime}) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => SharedRegistrationDialog(
-        regId: regData.id,
-        existingInfo: null, // ID Card registration มักเป็นใหม่
-        latestStay: null, // ID Card registration มักเป็นใหม่
-        canCreateNew: true, // สร้างใหม่เสมอ
-        onCompleted: () {
-          Navigator.pop(ctx); // ปิด registration dialog
-          Navigator.pop(context); // กลับไปหน้าเมนู
-          
-          // แสดงข้อความสำเร็จ
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ลงทะเบียนเสร็จสิ้น'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        },
-      ),
-    );
+  /// แสดง Dialog การลงทะเบียนพร้อมตรวจสอบข้อมูลเดิม
+  Future<void> _showRegistrationDialog(RegData regData, {required bool isFirstTime}) async {
+    try {
+      // ตรวจสอบข้อมูลเพิ่มเติมที่อาจมีอยู่แล้ว
+      final additionalInfo = await DbHelper().fetchAdditionalInfo(regData.id);
+      
+      // ตรวจสอบสถานะการเข้าพัก
+      final stayStatus = await DbHelper().checkStayStatus(regData.id);
+      final latestStay = stayStatus['latestStay'] as StayRecord?;
+      final canCreateNew = stayStatus['canCreateNew'] as bool;
+      
+      if (additionalInfo != null) {
+        debugPrint('📦 พบข้อมูลอุปกรณ์เดิม: ${additionalInfo.visitId}');
+      }
+      
+      if (latestStay != null) {
+        debugPrint('📅 พบ stay record: ${latestStay.id}');
+      }
+
+      if (!mounted) return;
+
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => SharedRegistrationDialog(
+          regId: regData.id,
+          existingInfo: additionalInfo,
+          latestStay: latestStay,
+          canCreateNew: canCreateNew,
+          onCompleted: () {
+            Navigator.pop(ctx); // ปิด registration dialog
+            Navigator.pop(context); // กลับไปหน้าเมนู
+            
+            // แสดงข้อความสำเร็จ
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(canCreateNew ? 'ลงทะเบียนเสร็จสิ้น' : 'อัปเดตข้อมูลเรียบร้อยแล้ว'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการโหลดข้อมูลเพิ่มเติม: $e');
+      
+      // ถ้าเกิดข้อผิดพลาด ให้แสดง dialog แบบเดิม
+      if (mounted) {
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => SharedRegistrationDialog(
+            regId: regData.id,
+            existingInfo: null,
+            latestStay: null,
+            canCreateNew: true,
+            onCompleted: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context);
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('ลงทะเบียนเสร็จสิ้น'),
+                  backgroundColor: Colors.green,
+                ),
+              );
+            },
+          ),
+        );
+      }
+    }
   }
 
   String _formatDate(String? dateString) {

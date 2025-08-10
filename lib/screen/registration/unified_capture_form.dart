@@ -6,6 +6,7 @@ import 'dart:async';
 import '../../models/reg_data.dart';
 import '../../services/registration_service.dart';
 import '../../services/stay_service.dart';
+import '../../services/db_helper.dart';
 import '../../widgets/shared_registration_dialog.dart';
 
 /// Unified ID card registration form that uses the new service architecture
@@ -387,21 +388,53 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
     );
   }
 
-  /// Show unified registration dialog
-  void _showUnifiedRegistrationDialog({
+  /// Show unified registration dialog with existing data check
+  Future<void> _showUnifiedRegistrationDialog({
     required RegData regData,
     required bool isEditMode,
     required StayRecord? existingStay,
     required RegAdditionalInfo? existingAdditionalInfo,
-  }) {
-    showDialog(
+  }) async {
+    // ตรวจสอบข้อมูลเพิ่มเติมและ stay record ที่อาจไม่ได้ส่งมา
+    RegAdditionalInfo? finalExistingInfo = existingAdditionalInfo;
+    StayRecord? finalLatestStay = existingStay;
+    bool finalCanCreateNew = !isEditMode;
+
+    try {
+      // ถ้าไม่มีข้อมูลเพิ่มเติม ให้ลองค้นหาใหม่
+      if (finalExistingInfo == null) {
+        final additionalInfo = await DbHelper().fetchAdditionalInfo(regData.id);
+        if (additionalInfo != null) {
+          finalExistingInfo = additionalInfo;
+          debugPrint('📦 โหลดข้อมูลอุปกรณ์: ${additionalInfo.visitId}');
+        }
+      }
+
+      // ถ้าไม่มี stay record ให้ตรวจสอบสถานะการเข้าพัก
+      if (finalLatestStay == null) {
+        final stayStatus = await DbHelper().checkStayStatus(regData.id);
+        finalLatestStay = stayStatus['latestStay'] as StayRecord?;
+        finalCanCreateNew = stayStatus['canCreateNew'] as bool;
+        
+        if (finalLatestStay != null) {
+          debugPrint('📅 โหลด stay record: ${finalLatestStay?.id}');
+        }
+      }
+
+    } catch (e) {
+      debugPrint('❌ เกิดข้อผิดพลาดในการโหลดข้อมูลเพิ่มเติม: $e');
+    }
+
+    if (!mounted) return;
+
+    await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => SharedRegistrationDialog(
         regId: regData.id,
-        existingInfo: existingAdditionalInfo,
-        latestStay: existingStay,
-        canCreateNew: !isEditMode, // ถ้า editMode=true แสดงว่าแก้ไข, ถ้าไม่ใช่ก็สร้างใหม่
+        existingInfo: finalExistingInfo,
+        latestStay: finalLatestStay,
+        canCreateNew: finalCanCreateNew,
         onCompleted: () {
           Navigator.pop(ctx); // Close registration dialog
           Navigator.pop(context); // Return to menu
@@ -409,7 +442,7 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
           // Show success message
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(isEditMode ? 'อัปเดตข้อมูลเรียบร้อยแล้ว' : 'ลงทะเบียนเสร็จสิ้น'),
+              content: Text(finalCanCreateNew ? 'ลงทะเบียนเสร็จสิ้น' : 'อัปเดตข้อมูลเรียบร้อยแล้ว'),
               backgroundColor: Colors.green,
             ),
           );

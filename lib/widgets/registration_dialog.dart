@@ -549,10 +549,10 @@ class _RegistrationDialogState extends State<RegistrationDialog> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label),
+          Expanded(child: Text(label)),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
                 onPressed: value > 0 ? () => onChanged(value - 1) : null,

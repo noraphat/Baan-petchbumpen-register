@@ -25,7 +25,8 @@ class UnifiedRegistrationDialog extends StatefulWidget {
   });
 
   @override
-  State<UnifiedRegistrationDialog> createState() => _UnifiedRegistrationDialogState();
+  State<UnifiedRegistrationDialog> createState() =>
+      _UnifiedRegistrationDialogState();
 }
 
 class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
@@ -152,10 +153,7 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
   /// Show success message
   void _showSuccessMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-      ),
+      SnackBar(content: Text(message), backgroundColor: Colors.green),
     );
   }
 
@@ -171,12 +169,13 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
 
     try {
       // Validate using unified validation service
-      final validationError = await ValidationService.validateRegistrationUpdate(
-        visitorId: widget.regData.id,
-        newStart: _startDate!,
-        newEnd: _endDate!,
-        isEditMode: widget.isEditMode,
-      );
+      final validationError =
+          await ValidationService.validateRegistrationUpdate(
+            visitorId: widget.regData.id,
+            newStart: _startDate!,
+            newEnd: _endDate!,
+            isEditMode: widget.isEditMode,
+          );
 
       if (validationError != null) {
         _showErrorDialog(validationError);
@@ -186,7 +185,9 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
       // Update phone if changed (only if not locked by ID card)
       final updatedPhone = _phoneController.text.trim();
       if (updatedPhone != widget.regData.phone && !widget.regData.hasIdCard) {
-        final updatedRegData = widget.regData.copyWithEditable(phone: updatedPhone);
+        final updatedRegData = widget.regData.copyWithEditable(
+          phone: updatedPhone,
+        );
         await DbHelper().update(updatedRegData);
       }
 
@@ -208,8 +209,9 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
 
       if (widget.isEditMode && widget.existingStay != null) {
         // Update existing stay using unified service
-        final visitId = '${widget.regData.id}_${widget.existingStay!.createdAt.millisecondsSinceEpoch}';
-        
+        final visitId =
+            '${widget.regData.id}_${widget.existingStay!.createdAt.millisecondsSinceEpoch}';
+
         await StayService.updateStayAndAdditionalInfo(
           stayId: widget.existingStay!.id!,
           visitorId: widget.regData.id,
@@ -219,7 +221,7 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
           additionalInfo: additionalInfo.copyWith(visitId: visitId),
           note: _notesController.text.trim(),
         );
-        
+
         resultStay = widget.existingStay!.copyWith(
           startDate: _startDate,
           endDate: _endDate,
@@ -242,9 +244,12 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
         final regData = await DbHelper().fetchById(widget.regData.id);
         if (regData != null) {
           // Create final visitId for printing
-          final printVisitId = '${widget.regData.id}_${resultStay.createdAt.millisecondsSinceEpoch}';
-          final finalAdditionalInfo = additionalInfo.copyWith(visitId: printVisitId);
-          
+          final printVisitId =
+              '${widget.regData.id}_${resultStay.createdAt.millisecondsSinceEpoch}';
+          final finalAdditionalInfo = additionalInfo.copyWith(
+            visitId: printVisitId,
+          );
+
           await PrinterService().printReceipt(
             regData,
             additionalInfo: finalAdditionalInfo,
@@ -254,14 +259,20 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
       }
 
       // Show success and close dialog
-      _showSuccessMessage(widget.isEditMode ? 'อัปเดตข้อมูลเรียบร้อยแล้ว' : 'ลงทะเบียนเรียบร้อยแล้ว');
-      
-      // Create final additional info for callback
-      final callbackVisitId = '${widget.regData.id}_${resultStay.createdAt.millisecondsSinceEpoch}';
-      final callbackAdditionalInfo = additionalInfo.copyWith(visitId: callbackVisitId);
-      
-      widget.onCompleted(callbackAdditionalInfo);
+      _showSuccessMessage(
+        widget.isEditMode
+            ? 'อัปเดตข้อมูลเรียบร้อยแล้ว'
+            : 'ลงทะเบียนเรียบร้อยแล้ว',
+      );
 
+      // Create final additional info for callback
+      final callbackVisitId =
+          '${widget.regData.id}_${resultStay.createdAt.millisecondsSinceEpoch}';
+      final callbackAdditionalInfo = additionalInfo.copyWith(
+        visitId: callbackVisitId,
+      );
+
+      widget.onCompleted(callbackAdditionalInfo);
     } catch (e) {
       _showErrorDialog('เกิดข้อผิดพลาด: $e');
     } finally {
@@ -274,10 +285,10 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label),
+          Expanded(child: Text(label)),
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
                 onPressed: value > 0 ? () => onChanged(value - 1) : null,
@@ -288,7 +299,10 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                 alignment: Alignment.center,
                 child: Text(
                   value.toString(),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               IconButton(
@@ -319,15 +333,17 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                 children: [
                   Icon(
                     widget.regData.hasIdCard ? Icons.credit_card : Icons.person,
-                    color: widget.regData.hasIdCard ? Colors.blue : Colors.orange,
+                    color: widget.regData.hasIdCard
+                        ? Colors.blue
+                        : Colors.orange,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      widget.isEditMode ? 'แก้ไขข้อมูลการเข้าพัก' : 'ลงทะเบียนเข้าพัก',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
+                      widget.isEditMode
+                          ? 'แก้ไขข้อมูลการเข้าพัก'
+                          : 'ลงทะเบียนเข้าพัก',
+                      style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -359,10 +375,14 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium
-                                          ?.copyWith(fontWeight: FontWeight.bold),
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                     ),
                                     const SizedBox(height: 8),
-                                    Text('ชื่อ-นามสกุล: ${widget.regData.first} ${widget.regData.last}'),
+                                    Text(
+                                      'ชื่อ-นามสกุล: ${widget.regData.first} ${widget.regData.last}',
+                                    ),
                                     Text('เลขบัตร: ${widget.regData.id}'),
                                     const SizedBox(height: 8),
                                     TextFormField(
@@ -374,7 +394,8 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                                       ),
                                       keyboardType: TextInputType.phone,
                                       enabled: !widget.regData.hasIdCard,
-                                      validator: ValidationService.validatePhone,
+                                      validator:
+                                          ValidationService.validatePhone,
                                     ),
                                     const SizedBox(height: 8),
                                     Row(
@@ -382,10 +403,15 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                                         const Text('สถานะบัตร: '),
                                         Chip(
                                           label: Text(
-                                            widget.regData.hasIdCard ? 'มีบัตรประชาชน' : 'ไม่มีบัตร',
-                                            style: const TextStyle(fontSize: 12),
+                                            widget.regData.hasIdCard
+                                                ? 'มีบัตรประชาชน'
+                                                : 'ไม่มีบัตร',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                            ),
                                           ),
-                                          backgroundColor: widget.regData.hasIdCard
+                                          backgroundColor:
+                                              widget.regData.hasIdCard
                                               ? Colors.green.shade100
                                               : Colors.orange.shade100,
                                         ),
@@ -394,7 +420,10 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                                     if (widget.regData.hasIdCard)
                                       const Text(
                                         '* ข้อมูลถูกล็อคจากบัตรประชาชน',
-                                        style: TextStyle(color: Colors.red, fontSize: 12),
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -405,9 +434,7 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                             // Date selection
                             Text(
                               'ระยะเวลาการพัก',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),
@@ -422,7 +449,13 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                                         border: OutlineInputBorder(),
                                         suffixIcon: Icon(Icons.calendar_today),
                                       ),
-                                      child: Text(_startDate != null ? _formatDate(_startDate!) : 'เลือกวันที่'),
+                                      child: Text(
+                                        _startDate != null
+                                            ? _formatDate(_startDate!)
+                                            : 'เลือกวันที่',
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -436,7 +469,13 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                                         border: OutlineInputBorder(),
                                         suffixIcon: Icon(Icons.calendar_today),
                                       ),
-                                      child: Text(_endDate != null ? _formatDate(_endDate!) : 'เลือกวันที่'),
+                                      child: Text(
+                                        _endDate != null
+                                            ? _formatDate(_endDate!)
+                                            : 'เลือกวันที่',
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -447,9 +486,7 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                             // Equipment sections
                             Text(
                               'เสื้อผ้าชุดขาว',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),
@@ -458,10 +495,14 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                                 padding: const EdgeInsets.all(16),
                                 child: Column(
                                   children: [
-                                    _buildCounterRow('เสื้อขาว', _shirtCount, (value) {
+                                    _buildCounterRow('เสื้อขาว', _shirtCount, (
+                                      value,
+                                    ) {
                                       setState(() => _shirtCount = value);
                                     }),
-                                    _buildCounterRow('กางเกงขาว', _pantsCount, (value) {
+                                    _buildCounterRow('กางเกงขาว', _pantsCount, (
+                                      value,
+                                    ) {
                                       setState(() => _pantsCount = value);
                                     }),
                                   ],
@@ -472,9 +513,7 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
 
                             Text(
                               'อุปกรณ์การนอน',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),
@@ -483,13 +522,19 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                                 padding: const EdgeInsets.all(16),
                                 child: Column(
                                   children: [
-                                    _buildCounterRow('เสื่อ', _matCount, (value) {
+                                    _buildCounterRow('เสื่อ', _matCount, (
+                                      value,
+                                    ) {
                                       setState(() => _matCount = value);
                                     }),
-                                    _buildCounterRow('หมอน', _pillowCount, (value) {
+                                    _buildCounterRow('หมอน', _pillowCount, (
+                                      value,
+                                    ) {
                                       setState(() => _pillowCount = value);
                                     }),
-                                    _buildCounterRow('ผ้าห่ม', _blanketCount, (value) {
+                                    _buildCounterRow('ผ้าห่ม', _blanketCount, (
+                                      value,
+                                    ) {
                                       setState(() => _blanketCount = value);
                                     }),
                                   ],
@@ -501,9 +546,7 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                             // Additional information
                             Text(
                               'ข้อมูลเพิ่มเติม',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
+                              style: Theme.of(context).textTheme.titleMedium
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 8),
@@ -530,7 +573,9 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
 
                             if (_withChildren) ...[
                               const SizedBox(height: 8),
-                              _buildCounterRow('จำนวนเด็ก', _childrenCount, (value) {
+                              _buildCounterRow('จำนวนเด็ก', _childrenCount, (
+                                value,
+                              ) {
                                 setState(() => _childrenCount = value);
                               }),
                             ],
@@ -554,10 +599,14 @@ class _UnifiedRegistrationDialogState extends State<UnifiedRegistrationDialog> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.blue,
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
                               ),
                               child: Text(
-                                widget.isEditMode ? 'อัปเดตข้อมูล' : 'ยืนยันการลงทะเบียน',
+                                widget.isEditMode
+                                    ? 'อัปเดตข้อมูล'
+                                    : 'ยืนยันการลงทะเบียน',
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,

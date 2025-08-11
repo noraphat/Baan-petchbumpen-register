@@ -19,7 +19,7 @@ class DbHelper {
     final path = join(await getDatabasesPath(), 'dhamma_reg.db');
     return openDatabase(
       path,
-      version: 8, // เพิ่มเวอร์ชันเพื่ออัปเดตฐานข้อมูล
+      version: 9, // เพิ่มเวอร์ชันเพื่ออัปเดตฐานข้อมูล
       onCreate: (db, _) async {
         // ตารางข้อมูลหลัก
         await db.execute('''
@@ -77,11 +77,17 @@ class DbHelper {
         ''');
 
         // สร้าง indexes
-        await db.execute('CREATE INDEX idx_stays_visitor_id ON stays(visitor_id)');
-        await db.execute('CREATE INDEX idx_stays_date_range ON stays(start_date, end_date)');
+        await db.execute(
+          'CREATE INDEX idx_stays_visitor_id ON stays(visitor_id)',
+        );
+        await db.execute(
+          'CREATE INDEX idx_stays_date_range ON stays(start_date, end_date)',
+        );
 
         // ตาราง app_settings (สำหรับ menu visibility และการตั้งค่าระบบ)
-        await db.execute('''\n          CREATE TABLE app_settings (\n            key TEXT PRIMARY KEY,\n            value TEXT NOT NULL,\n            updated_at TEXT DEFAULT CURRENT_TIMESTAMP\n          )\n        ''');
+        await db.execute(
+          '''\n          CREATE TABLE app_settings (\n            key TEXT PRIMARY KEY,\n            value TEXT NOT NULL,\n            updated_at TEXT DEFAULT CURRENT_TIMESTAMP\n          )\n        ''',
+        );
 
         // ตาราง maps (ข้อมูลแผนที่)
         await db.execute('''
@@ -104,6 +110,7 @@ class DbHelper {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             size TEXT NOT NULL,
+            shape TEXT DEFAULT 'square',
             capacity INTEGER NOT NULL,
             position_x REAL,
             position_y REAL,
@@ -135,10 +142,18 @@ class DbHelper {
 
         // สร้าง indexes สำหรับตารางใหม่
         await db.execute('CREATE INDEX idx_rooms_status ON rooms(status)');
-        await db.execute('CREATE INDEX idx_rooms_position ON rooms(position_x, position_y)');
-        await db.execute('CREATE INDEX idx_room_bookings_room_id ON room_bookings(room_id)');
-        await db.execute('CREATE INDEX idx_room_bookings_visitor_id ON room_bookings(visitor_id)');
-        await db.execute('CREATE INDEX idx_room_bookings_dates ON room_bookings(check_in_date, check_out_date)');
+        await db.execute(
+          'CREATE INDEX idx_rooms_position ON rooms(position_x, position_y)',
+        );
+        await db.execute(
+          'CREATE INDEX idx_room_bookings_room_id ON room_bookings(room_id)',
+        );
+        await db.execute(
+          'CREATE INDEX idx_room_bookings_visitor_id ON room_bookings(visitor_id)',
+        );
+        await db.execute(
+          'CREATE INDEX idx_room_bookings_dates ON room_bookings(check_in_date, check_out_date)',
+        );
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -163,19 +178,19 @@ class DbHelper {
             )
           ''');
         }
-        
+
         if (oldVersion < 7) {
           // ปรับปรุงโครงสร้าง reg_additional_info ให้รองรับหลาย visit ต่อคน
-          
+
           // 1. Backup ข้อมูลเก่า
           await db.execute('''
             CREATE TABLE reg_additional_info_backup AS 
             SELECT * FROM reg_additional_info
           ''');
-          
+
           // 2. ลบตารางเก่า
           await db.execute('DROP TABLE reg_additional_info');
-          
+
           // 3. สร้างตารางใหม่
           await db.execute('''
             CREATE TABLE reg_additional_info (
@@ -199,7 +214,7 @@ class DbHelper {
               UNIQUE(regId, visitId)
             )
           ''');
-          
+
           // 4. Migrate ข้อมูลเก่าโดยสร้าง visitId จาก timestamp
           await db.execute('''
             INSERT INTO reg_additional_info 
@@ -214,7 +229,7 @@ class DbHelper {
               childrenCount, notes, createdAt, updatedAt
             FROM reg_additional_info_backup
           ''');
-          
+
           // 5. ลบ backup table
           await db.execute('DROP TABLE reg_additional_info_backup');
         }
@@ -251,8 +266,12 @@ class DbHelper {
           ''');
 
           // สร้าง indexes
-          await db.execute('CREATE INDEX idx_stays_visitor_id ON stays(visitor_id)');
-          await db.execute('CREATE INDEX idx_stays_date_range ON stays(start_date, end_date)');
+          await db.execute(
+            'CREATE INDEX idx_stays_visitor_id ON stays(visitor_id)',
+          );
+          await db.execute(
+            'CREATE INDEX idx_stays_date_range ON stays(start_date, end_date)',
+          );
         }
 
         if (oldVersion < 5) {
@@ -272,13 +291,13 @@ class DbHelper {
             'updated_at': DateTime.now().toIso8601String(),
           });
           await db.insert('app_settings', {
-            'key': 'menu_booking_enabled', 
+            'key': 'menu_booking_enabled',
             'value': 'false',
             'updated_at': DateTime.now().toIso8601String(),
           });
           await db.insert('app_settings', {
             'key': 'menu_schedule_enabled',
-            'value': 'true', 
+            'value': 'true',
             'updated_at': DateTime.now().toIso8601String(),
           });
           await db.insert('app_settings', {
@@ -290,15 +309,26 @@ class DbHelper {
 
         if (oldVersion < 6) {
           // เพิ่มคอลัมน์ status สำหรับ soft delete
-          await db.execute('ALTER TABLE regs ADD COLUMN status TEXT DEFAULT \'A\'');
-          
+          await db.execute(
+            'ALTER TABLE regs ADD COLUMN status TEXT DEFAULT \'A\'',
+          );
+
           // อัปเดตข้อมูลเก่าให้มี status = 'A'
-          await db.execute('UPDATE regs SET status = \'A\' WHERE status IS NULL');
+          await db.execute(
+            'UPDATE regs SET status = \'A\' WHERE status IS NULL',
+          );
+        }
+
+        if (oldVersion < 9) {
+          // เพิ่มคอลัมน์ shape ในตาราง rooms
+          await db.execute(
+            'ALTER TABLE rooms ADD COLUMN shape TEXT DEFAULT \'square\'',
+          );
         }
 
         if (oldVersion < 8) {
           // เพิ่มตารางสำหรับระบบแผนที่และห้องพัก
-          
+
           // ตาราง maps
           await db.execute('''
             CREATE TABLE maps (
@@ -351,10 +381,18 @@ class DbHelper {
 
           // สร้าง indexes
           await db.execute('CREATE INDEX idx_rooms_status ON rooms(status)');
-          await db.execute('CREATE INDEX idx_rooms_position ON rooms(position_x, position_y)');
-          await db.execute('CREATE INDEX idx_room_bookings_room_id ON room_bookings(room_id)');
-          await db.execute('CREATE INDEX idx_room_bookings_visitor_id ON room_bookings(visitor_id)');
-          await db.execute('CREATE INDEX idx_room_bookings_dates ON room_bookings(check_in_date, check_out_date)');
+          await db.execute(
+            'CREATE INDEX idx_rooms_position ON rooms(position_x, position_y)',
+          );
+          await db.execute(
+            'CREATE INDEX idx_room_bookings_room_id ON room_bookings(room_id)',
+          );
+          await db.execute(
+            'CREATE INDEX idx_room_bookings_visitor_id ON room_bookings(visitor_id)',
+          );
+          await db.execute(
+            'CREATE INDEX idx_room_bookings_dates ON room_bookings(check_in_date, check_out_date)',
+          );
         }
       },
     );
@@ -448,8 +486,12 @@ class DbHelper {
   // อัปเดตสถานะ stay ที่หมดอายุแล้วอัตโนมัติ
   Future<void> updateExpiredStays() async {
     final today = DateTime.now();
-    final todayStr = DateTime(today.year, today.month, today.day).toIso8601String();
-    
+    final todayStr = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).toIso8601String();
+
     await (await db).update(
       'stays',
       {'status': 'completed'},
@@ -481,7 +523,9 @@ class DbHelper {
   }
 
   // ฟังก์ชันใหม่สำหรับดึงข้อมูลเพิ่มเติมตาม visitId เฉพาะ
-  Future<RegAdditionalInfo?> fetchAdditionalInfoByVisitId(String visitId) async {
+  Future<RegAdditionalInfo?> fetchAdditionalInfoByVisitId(
+    String visitId,
+  ) async {
     final res = await (await db).query(
       'reg_additional_info',
       where: 'visitId = ?',
@@ -492,7 +536,9 @@ class DbHelper {
   }
 
   // ฟังก์ชันสำหรับดึงข้อมูลเพิ่มเติมทั้งหมดของ regId
-  Future<List<RegAdditionalInfo>> fetchAllAdditionalInfoByRegId(String regId) async {
+  Future<List<RegAdditionalInfo>> fetchAllAdditionalInfoByRegId(
+    String regId,
+  ) async {
     final res = await (await db).query(
       'reg_additional_info',
       where: 'regId = ?',
@@ -556,7 +602,6 @@ class DbHelper {
     await updateAdditionalInfo(updatedInfo);
   }
 
-
   // ฟังก์ชันสร้างข้อมูลทดสอบ
   Future<void> createTestData() async {
     final testData = RegData.manual(
@@ -581,7 +626,8 @@ class DbHelper {
     await insertStay(stayRecord);
 
     // สร้าง additional info โดยใช้ visitId ที่เชื่อมกับ stay record
-    final visitId = '${testData.id}_${stayRecord.createdAt.millisecondsSinceEpoch}';
+    final visitId =
+        '${testData.id}_${stayRecord.createdAt.millisecondsSinceEpoch}';
     final additionalInfo = RegAdditionalInfo.create(
       regId: testData.id,
       visitId: visitId,
@@ -598,7 +644,9 @@ class DbHelper {
     await insertAdditionalInfo(additionalInfo);
 
     // สร้างข้อมูลการมาครั้งที่ 2 (1 เดือนต่อมา)
-    await Future.delayed(const Duration(milliseconds: 10)); // เพื่อให้ timestamp ต่างกัน
+    await Future.delayed(
+      const Duration(milliseconds: 10),
+    ); // เพื่อให้ timestamp ต่างกัน
     final stayRecord2 = StayRecord.create(
       visitorId: testData.id,
       startDate: DateTime.now().add(const Duration(days: 30)),
@@ -607,7 +655,8 @@ class DbHelper {
     );
     await insertStay(stayRecord2);
 
-    final visitId2 = '${testData.id}_${stayRecord2.createdAt.millisecondsSinceEpoch}';
+    final visitId2 =
+        '${testData.id}_${stayRecord2.createdAt.millisecondsSinceEpoch}';
     final additionalInfo2 = RegAdditionalInfo.create(
       regId: testData.id,
       visitId: visitId2,
@@ -666,7 +715,7 @@ class DbHelper {
   Future<List<StayRecord>> fetchAllStays(String visitorId) async {
     // อัปเดตสถานะที่หมดอายุก่อนดึงข้อมูล
     await updateExpiredStays();
-    
+
     final res = await (await db).query(
       'stays',
       where: 'visitor_id = ?',
@@ -680,9 +729,13 @@ class DbHelper {
   Future<List<StayRecord>> fetchActiveStays(String visitorId) async {
     // อัปเดตสถานะที่หมดอายุก่อนดึงข้อมูล
     await updateExpiredStays();
-    
+
     final today = DateTime.now();
-    final todayStr = DateTime(today.year, today.month, today.day).toIso8601String();
+    final todayStr = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).toIso8601String();
     final res = await (await db).query(
       'stays',
       where: 'visitor_id = ? AND date(end_date) >= date(?)',
@@ -747,13 +800,22 @@ class DbHelper {
   }
 
   // ตรวจสอบว่ามีการจองซ้อนทับหรือไม่
-  Future<bool> hasOverlappingStay(String visitorId, DateTime startDate, DateTime endDate, {int? excludeStayId}) async {
-    String whereClause = 'visitor_id = ? AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND start_date <= ?))';
+  Future<bool> hasOverlappingStay(
+    String visitorId,
+    DateTime startDate,
+    DateTime endDate, {
+    int? excludeStayId,
+  }) async {
+    String whereClause =
+        'visitor_id = ? AND ((start_date <= ? AND end_date >= ?) OR (start_date <= ? AND end_date >= ?) OR (start_date >= ? AND start_date <= ?))';
     List<dynamic> whereArgs = [
       visitorId,
-      startDate.toIso8601String(), startDate.toIso8601String(),
-      endDate.toIso8601String(), endDate.toIso8601String(),
-      startDate.toIso8601String(), endDate.toIso8601String(),
+      startDate.toIso8601String(),
+      startDate.toIso8601String(),
+      endDate.toIso8601String(),
+      endDate.toIso8601String(),
+      startDate.toIso8601String(),
+      endDate.toIso8601String(),
     ];
 
     if (excludeStayId != null) {
@@ -775,13 +837,23 @@ class DbHelper {
   // ดูสถิติฐานข้อมูล
   Future<Map<String, int>> getDatabaseStatistics() async {
     final database = await db;
-    
+
     // นับจำนวน record ในแต่ละตาราง
-    final regsCount = await database.rawQuery('SELECT COUNT(*) as count FROM regs WHERE status = ?', ['A']);
-    final additionalInfoCount = await database.rawQuery('SELECT COUNT(*) as count FROM reg_additional_info');
-    final staysCount = await database.rawQuery('SELECT COUNT(*) as count FROM stays');
-    final deletedRegsCount = await database.rawQuery('SELECT COUNT(*) as count FROM regs WHERE status = ?', ['I']);
-    
+    final regsCount = await database.rawQuery(
+      'SELECT COUNT(*) as count FROM regs WHERE status = ?',
+      ['A'],
+    );
+    final additionalInfoCount = await database.rawQuery(
+      'SELECT COUNT(*) as count FROM reg_additional_info',
+    );
+    final staysCount = await database.rawQuery(
+      'SELECT COUNT(*) as count FROM stays',
+    );
+    final deletedRegsCount = await database.rawQuery(
+      'SELECT COUNT(*) as count FROM regs WHERE status = ?',
+      ['I'],
+    );
+
     return {
       'totalVisitors': regsCount.first['count'] as int,
       'deletedVisitors': deletedRegsCount.first['count'] as int,
@@ -794,7 +866,7 @@ class DbHelper {
   Future<int> clearTestData() async {
     final database = await db;
     int deletedCount = 0;
-    
+
     await database.transaction((txn) async {
       // ลบข้อมูลทดสอบจาก reg_additional_info ที่มี notes หรือ location เป็น test
       final deletedAdditionalInfo = await txn.delete(
@@ -802,27 +874,27 @@ class DbHelper {
         where: 'notes LIKE ? OR location LIKE ?',
         whereArgs: ['%ทดสอบ%', '%ทดสอบ%'],
       );
-      
+
       // ลบข้อมูลทดสอบจาก stays ที่มี note เป็น test
       final deletedStays = await txn.delete(
         'stays',
         where: 'note LIKE ?',
         whereArgs: ['%ทดสอบ%'],
       );
-      
+
       // ลบข้อมูลทดสอบจาก regs ที่มี phone ขึ้นต้นด้วย 000 หรือ first name เป็น ทดสอบ
       final deletedRegs = await txn.delete(
         'regs',
         where: 'phone LIKE ? OR first LIKE ?',
         whereArgs: ['000%', '%ทดสอบ%'],
       );
-      
+
       deletedCount = deletedRegs + deletedAdditionalInfo + deletedStays;
     });
-    
+
     // VACUUM เพื่อเคลียร์ space
     await database.execute('VACUUM');
-    
+
     return deletedCount;
   }
 
@@ -887,19 +959,23 @@ class DbHelper {
         addr: userData['addr']!,
         gender: userData['gender']!,
       );
-      
+
       await insert(regData);
 
       // สร้างประวัติการเข้าพัก 1-3 ครั้งสำหรับแต่ละคน
       final visitCount = (userData['id']!.hashCode % 3) + 1; // 1-3 ครั้ง
-      
+
       for (int i = 0; i < visitCount; i++) {
-        await Future.delayed(const Duration(milliseconds: 5)); // เพื่อให้ timestamp ต่างกัน
-        
+        await Future.delayed(
+          const Duration(milliseconds: 5),
+        ); // เพื่อให้ timestamp ต่างกัน
+
         // สร้าง stay record
-        final startDate = DateTime.now().subtract(Duration(days: 90 - (i * 30)));
+        final startDate = DateTime.now().subtract(
+          Duration(days: 90 - (i * 30)),
+        );
         final endDate = startDate.add(Duration(days: 5 + (i * 2)));
-        
+
         final stayRecord = StayRecord.create(
           visitorId: regData.id,
           startDate: startDate,
@@ -909,7 +985,8 @@ class DbHelper {
         await insertStay(stayRecord);
 
         // สร้าง additional info
-        final visitId = '${regData.id}_${stayRecord.createdAt.millisecondsSinceEpoch}';
+        final visitId =
+            '${regData.id}_${stayRecord.createdAt.millisecondsSinceEpoch}';
         final additionalInfo = RegAdditionalInfo.create(
           regId: regData.id,
           visitId: visitId,
@@ -932,21 +1009,23 @@ class DbHelper {
   // ล้างข้อมูลทั้งหมด (⚠️ ทำลายทุกข้อมูลในระบบ)
   Future<void> clearAllData() async {
     final database = await db;
-    
+
     await database.transaction((txn) async {
       // ลบข้อมูลทั้งหมดในทุกตาราง (ตามลำดับ foreign key)
       await txn.delete('reg_additional_info'); // ลบข้อมูลเพิ่มเติมก่อน
       await txn.delete('stays'); // ลบข้อมูลการพัก
       await txn.delete('regs'); // ลบข้อมูลหลัก
       await txn.delete('app_settings'); // ลบการตั้งค่า
-      
+
       // รีเซต auto increment sequences (SQLite)
-      await txn.execute("DELETE FROM sqlite_sequence WHERE name IN ('reg_additional_info', 'stays')");
+      await txn.execute(
+        "DELETE FROM sqlite_sequence WHERE name IN ('reg_additional_info', 'stays')",
+      );
     });
-    
+
     // VACUUM เพื่อเคลียร์ space และ compact database
     await database.execute('VACUUM');
-    
+
     // สร้างการตั้งค่าเริ่มต้นใหม่
     await _initializeDefaultSettings();
   }
@@ -973,15 +1052,11 @@ class DbHelper {
 
   // ตั้งค่า setting
   Future<void> setSetting(String key, String value) async {
-    await (await db).insert(
-      'app_settings',
-      {
-        'key': key,
-        'value': value,
-        'updated_at': DateTime.now().toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await (await db).insert('app_settings', {
+      'key': key,
+      'value': value,
+      'updated_at': DateTime.now().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   // ดึงค่า setting แบบ boolean
@@ -998,10 +1073,22 @@ class DbHelper {
 
   // ดึงการตั้งค่าเมนูทั้งหมด
   Future<Map<String, bool>> getAllMenuSettings() async {
-    final whiteRobe = await getBoolSetting('menu_white_robe_enabled', defaultValue: false);
-    final booking = await getBoolSetting('menu_booking_enabled', defaultValue: false);
-    final schedule = await getBoolSetting('menu_schedule_enabled', defaultValue: true);
-    final summary = await getBoolSetting('menu_summary_enabled', defaultValue: true);
+    final whiteRobe = await getBoolSetting(
+      'menu_white_robe_enabled',
+      defaultValue: false,
+    );
+    final booking = await getBoolSetting(
+      'menu_booking_enabled',
+      defaultValue: false,
+    );
+    final schedule = await getBoolSetting(
+      'menu_schedule_enabled',
+      defaultValue: true,
+    );
+    final summary = await getBoolSetting(
+      'menu_summary_enabled',
+      defaultValue: true,
+    );
 
     return {
       'whiteRobe': whiteRobe,
@@ -1015,10 +1102,7 @@ class DbHelper {
 
   // ดึงแผนที่ทั้งหมด
   Future<List<MapData>> fetchAllMaps() async {
-    final res = await (await db).query(
-      'maps',
-      orderBy: 'created_at DESC',
-    );
+    final res = await (await db).query('maps', orderBy: 'created_at DESC');
     return res.map((m) => MapData.fromMap(m)).toList();
   }
 
@@ -1064,7 +1148,7 @@ class DbHelper {
         where: 'is_active = ?',
         whereArgs: [1],
       );
-      
+
       // ตั้งแผนที่ใหม่เป็น active
       await txn.update(
         'maps',
@@ -1079,10 +1163,7 @@ class DbHelper {
 
   // ดึงห้องพักทั้งหมด
   Future<List<Room>> fetchAllRooms() async {
-    final res = await (await db).query(
-      'rooms',
-      orderBy: 'name ASC',
-    );
+    final res = await (await db).query('rooms', orderBy: 'name ASC');
     return res.map((m) => Room.fromMap(m)).toList();
   }
 
@@ -1152,7 +1233,11 @@ class DbHelper {
   }
 
   // อัปเดตสถานะห้องพัก
-  Future<void> updateRoomStatus(int roomId, RoomStatus status, {String? occupantId}) async {
+  Future<void> updateRoomStatus(
+    int roomId,
+    RoomStatus status, {
+    String? occupantId,
+  }) async {
     await (await db).update(
       'rooms',
       {
@@ -1166,8 +1251,13 @@ class DbHelper {
   }
 
   // ตรวจสอบว่าตำแหน่งนั้นมีห้องอื่นอยู่หรือไม่
-  Future<bool> isPositionOccupied(double x, double y, {int? excludeRoomId}) async {
-    String whereClause = 'ABS(position_x - ?) < 10 AND ABS(position_y - ?) < 10';
+  Future<bool> isPositionOccupied(
+    double x,
+    double y, {
+    int? excludeRoomId,
+  }) async {
+    String whereClause =
+        'ABS(position_x - ?) < 10 AND ABS(position_y - ?) < 10';
     List<dynamic> whereArgs = [x, y];
 
     if (excludeRoomId != null) {
@@ -1187,11 +1277,36 @@ class DbHelper {
   // สร้างข้อมูลห้องพักทดสอบ
   Future<void> createTestRooms() async {
     final testRooms = [
-      Room.create(name: 'ห้อง 101', size: RoomSize.small, capacity: 2, description: 'ห้องเล็กสำหรับ 2 คน'),
-      Room.create(name: 'ห้อง 102', size: RoomSize.medium, capacity: 4, description: 'ห้องกลางสำหรับ 4 คน'),
-      Room.create(name: 'ศาลาใหญ่', size: RoomSize.large, capacity: 20, description: 'ศาลาใหญ่สำหรับกิจกรรมหมู่'),
-      Room.create(name: 'ห้อง 201', size: RoomSize.small, capacity: 2, description: 'ห้องเล็กชั้น 2'),
-      Room.create(name: 'ห้อง 202', size: RoomSize.medium, capacity: 4, description: 'ห้องกลางชั้น 2'),
+      Room.create(
+        name: 'ห้อง 101',
+        size: RoomSize.small,
+        capacity: 2,
+        description: 'ห้องเล็กสำหรับ 2 คน',
+      ),
+      Room.create(
+        name: 'ห้อง 102',
+        size: RoomSize.medium,
+        capacity: 4,
+        description: 'ห้องกลางสำหรับ 4 คน',
+      ),
+      Room.create(
+        name: 'ศาลาใหญ่',
+        size: RoomSize.large,
+        capacity: 20,
+        description: 'ศาลาใหญ่สำหรับกิจกรรมหมู่',
+      ),
+      Room.create(
+        name: 'ห้อง 201',
+        size: RoomSize.small,
+        capacity: 2,
+        description: 'ห้องเล็กชั้น 2',
+      ),
+      Room.create(
+        name: 'ห้อง 202',
+        size: RoomSize.medium,
+        capacity: 4,
+        description: 'ห้องกลางชั้น 2',
+      ),
     ];
 
     for (final room in testRooms) {
@@ -1248,6 +1363,10 @@ class DbHelper {
 
   // ลบการจองห้องพัก
   Future<void> deleteBooking(int bookingId) async {
-    await (await db).delete('room_bookings', where: 'id = ?', whereArgs: [bookingId]);
+    await (await db).delete(
+      'room_bookings',
+      where: 'id = ?',
+      whereArgs: [bookingId],
+    );
   }
 }

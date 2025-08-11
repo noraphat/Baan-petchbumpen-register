@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/booking_service.dart';
+import '../services/menu_settings_service.dart';
 import '../models/room_model.dart';
 
 /// หน้าจอสรุปผลประจำวันสำหรับห้องพัก
@@ -13,8 +14,10 @@ class RoomUsageSummaryScreen extends StatefulWidget {
 
 class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
   final BookingService _bookingService = BookingService();
+  final MenuSettingsService _menuSettings = MenuSettingsService();
   List<RoomUsageSummary> _summaryData = [];
   bool _isLoading = false;
+  bool _isBookingMenuEnabled = false;
   String _selectedPeriod = 'วันนี้';
   DateTime _customStartDate = DateTime.now();
   DateTime _customEndDate = DateTime.now();
@@ -35,7 +38,20 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
   @override
   void initState() {
     super.initState();
+    _loadMenuSettings();
     _loadData();
+  }
+
+  /// โหลดการตั้งค่าเมนู
+  Future<void> _loadMenuSettings() async {
+    try {
+      final isBookingEnabled = await _menuSettings.isBookingEnabled;
+      setState(() {
+        _isBookingMenuEnabled = isBookingEnabled;
+      });
+    } catch (e) {
+      debugPrint('❌ Failed to load menu settings: $e');
+    }
   }
 
   /// โหลดข้อมูลสรุปการใช้งานห้อง
@@ -146,6 +162,9 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
       ),
       body: Column(
         children: [
+          // แสดงข้อความเตือนหากเมนู "จองห้องพัก" ถูกปิด
+          if (!_isBookingMenuEnabled) _buildBookingMenuDisabledWarning(),
+
           // ส่วนเลือกช่วงเวลา
           _buildPeriodSelector(),
 
@@ -153,6 +172,8 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
           Expanded(
             child: _isLoading
                 ? Center(child: CircularProgressIndicator())
+                : !_isBookingMenuEnabled
+                ? _buildBookingDisabledState()
                 : _summaryData.isEmpty
                 ? _buildEmptyState()
                 : _buildSummaryTable(),
@@ -582,6 +603,84 @@ class _RoomUsageSummaryScreenState extends State<RoomUsageSummaryScreen> {
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// สร้าง Widget เตือนเมื่อเมนู "จองห้องพัก" ถูกปิด
+  Widget _buildBookingMenuDisabledWarning() {
+    return Container(
+      margin: EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade300),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber, color: Colors.orange.shade700),
+          SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'เมนู "จองห้องพัก" ถูกปิด',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange.shade800,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'ข้อมูลห้องพักอาจไม่สมบูรณ์ เนื่องจากฟีเจอร์การจองห้องไม่ได้เปิดใช้งาน',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.orange.shade700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// สร้างหน้าจอเมื่อเมนู "จองห้องพัก" ถูกปิด
+  Widget _buildBookingDisabledState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.block, size: 64, color: Colors.orange[600]),
+          SizedBox(height: 16),
+          Text(
+            'Tab ห้องพักไม่พร้อมใช้งาน',
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.orange[800],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'เมนู "จองห้องพัก" ถูกปิดใช้งาน\nกรุณาเปิดใช้งานเมนู "จองห้องพัก" ก่อนเข้าใช้หน้านี้',
+            style: TextStyle(color: Colors.grey[600]),
+            textAlign: TextAlign.center,
+          ),
+          SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context),
+            icon: Icon(Icons.arrow_back),
+            label: Text('กลับไปหน้าเมนู'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
             ),
           ),
         ],

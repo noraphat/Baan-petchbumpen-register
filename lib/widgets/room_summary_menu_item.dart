@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../screen/room_usage_summary_screen.dart';
+import '../services/menu_settings_service.dart';
 
 /// Widget สำหรับเพิ่มรายการเมนู "สรุปผลประจำวัน - ห้องพัก" 
 /// ลงในเมนูหลักของแอป
@@ -42,13 +43,68 @@ class RoomSummaryMenuItem extends StatelessWidget {
           size: 16,
           color: Colors.grey[500],
         ),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => RoomUsageSummaryScreen(),
-            ),
-          );
+        onTap: () async {
+          // ตรวจสอบสถานะเมนู "จองห้องพัก" ก่อนเข้าหน้า
+          final menuSettings = MenuSettingsService();
+          final isBookingEnabled = await menuSettings.isBookingEnabled;
+          
+          if (!isBookingEnabled && context.mounted) {
+            // แสดง dialog เตือนก่อนเข้าหน้า
+            final proceed = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('เตือน')),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('เมนู "จองห้องพัก" ถูกปิดใช้งาน'),
+                    SizedBox(height: 8),
+                    Text(
+                      'Tab ห้องพักจะไม่สามารถแสดงข้อมูลได้อย่างสมบูรณ์ เนื่องจากระบบการจองห้องไม่ได้เปิดใช้งาน',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'ต้องการดำเนินการต่อหรือไม่?',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text('ยกเลิก'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: Text('ดำเนินการต่อ'),
+                  ),
+                ],
+              ),
+            );
+            
+            if (proceed != true) return;
+          }
+          
+          if (context.mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => RoomUsageSummaryScreen(),
+              ),
+            );
+          }
         },
       ),
     );
@@ -97,13 +153,68 @@ class RoomSummaryGridTile extends StatelessWidget {
     return Card(
       elevation: 2,
       child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => RoomUsageSummaryScreen(),
-            ),
-          );
+        onTap: () async {
+          // ตรวจสอบสถานะเมนู "จองห้องพัก" ก่อนเข้าหน้า
+          final menuSettings = MenuSettingsService();
+          final isBookingEnabled = await menuSettings.isBookingEnabled;
+          
+          if (!isBookingEnabled && context.mounted) {
+            // แสดง dialog เตือนก่อนเข้าหน้า
+            final proceed = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Row(
+                  children: [
+                    Icon(Icons.warning_amber, color: Colors.orange),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('เตือน')),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('เมนู "จองห้องพัก" ถูกปิดใช้งาน'),
+                    SizedBox(height: 8),
+                    Text(
+                      'Tab ห้องพักจะไม่สามารถแสดงข้อมูลได้อย่างสมบูรณ์ เนื่องจากระบบการจองห้องไม่ได้เปิดใช้งาน',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      'ต้องการดำเนินการต่อหรือไม่?',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text('ยกเลิก'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: Text('ดำเนินการต่อ'),
+                  ),
+                ],
+              ),
+            );
+            
+            if (proceed != true) return;
+          }
+          
+          if (context.mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => RoomUsageSummaryScreen(),
+              ),
+            );
+          }
         },
         borderRadius: BorderRadius.circular(8),
         child: Padding(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/summary_service.dart';
 import '../services/booking_service.dart';
+import '../services/menu_settings_service.dart';
 import '../models/room_model.dart';
 
 class DailySummaryScreen extends StatefulWidget {
@@ -15,6 +16,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
     with TickerProviderStateMixin {
   final SummaryService _summaryService = SummaryService();
   final BookingService _bookingService = BookingService();
+  final MenuSettingsService _menuSettings = MenuSettingsService();
   late TabController _tabController;
 
   DateTime _selectedDate = DateTime.now();
@@ -28,12 +30,33 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
   RepeatVisitorStats? _repeatStats;
   List<RoomUsageSummary>? _roomSummary;
   bool _isLoading = false;
+  bool _isBookingMenuEnabled = false;
+  int _totalTabs = 2;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _loadData();
+    _loadMenuSettings();
+  }
+
+  Future<void> _loadMenuSettings() async {
+    try {
+      final isBookingEnabled = await _menuSettings.isBookingEnabled;
+      setState(() {
+        _isBookingMenuEnabled = isBookingEnabled;
+        _totalTabs = _isBookingMenuEnabled ? 2 : 1; // ถ้าปิดเมนูจองห้อง ให้มีแค่ 1 tab
+        _tabController = TabController(length: _totalTabs, vsync: this);
+      });
+      _loadData();
+    } catch (e) {
+      // ถ้าเกิดข้อผิดพลาด ให้ใช้ค่า default (2 tabs)
+      setState(() {
+        _isBookingMenuEnabled = false; 
+        _totalTabs = 1;
+        _tabController = TabController(length: _totalTabs, vsync: this);
+      });
+      _loadData();
+    }
   }
 
   @override
@@ -66,11 +89,15 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
         );
       }
 
-      // โหลดข้อมูลห้องพัก
-      _roomSummary = await _bookingService.getRoomUsageSummary(
-        startDate: range.start,
-        endDate: range.end,
-      );
+      // โหลดข้อมูลห้องพักเฉพาะเมื่อเมนูจองห้องเปิดอยู่
+      if (_isBookingMenuEnabled) {
+        _roomSummary = await _bookingService.getRoomUsageSummary(
+          startDate: range.start,
+          endDate: range.end,
+        );
+      } else {
+        _roomSummary = null; // ไม่โหลดข้อมูลห้องพักถ้าเมนูถูกปิด
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -134,9 +161,10 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
-          tabs: const [
-            Tab(icon: Icon(Icons.people), text: 'ผู้ปฏิบัติธรรม'),
-            Tab(icon: Icon(Icons.hotel), text: 'ห้องพัก'),
+          tabs: [
+            const Tab(icon: Icon(Icons.people), text: 'ผู้ปฏิบัติธรรม'),
+            if (_isBookingMenuEnabled) 
+              const Tab(icon: Icon(Icons.hotel), text: 'ห้องพัก'),
           ],
         ),
       ),
@@ -153,8 +181,9 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
                       _selectedPeriod == 'today'
                           ? _buildDailyView()
                           : _buildPeriodView(),
-                      // แท็บห้องพัก (ใหม่)
-                      _buildRoomSummaryView(),
+                      // แท็บห้องพัก (ใหม่) - แสดงเฉพาะเมื่อเมนูจองห้องเปิดอยู่
+                      if (_isBookingMenuEnabled)
+                        _buildRoomSummaryView(),
                     ],
                   ),
           ),

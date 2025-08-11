@@ -14,45 +14,45 @@ class AdminSettings extends StatefulWidget {
 
 class _AdminSettingsState extends State<AdminSettings> {
   // Menu visibility toggles
-  bool _whiteRobeEnabled = false;  // ค่าเริ่มต้นปิด
-  bool _bookingEnabled = false;    // ค่าเริ่มต้นปิด
+  bool _whiteRobeEnabled = false; // ค่าเริ่มต้นปิด
+  bool _bookingEnabled = false; // ค่าเริ่มต้นปิด
   bool _debugRoomMenuEnabled = false; // ค่าเริ่มต้นปิด
-  
+
   // Auto backup toggle
   bool _autoBackupEnabled = false;
-  
+
   // System info
   int _totalRegistered = 0;
   int _currentStays = 0;
   double _dbSizeKB = 0.0;
-  
+
   @override
   void initState() {
     super.initState();
     _loadSystemInfo();
     _loadMenuSettings();
   }
-  
+
   Future<void> _loadMenuSettings() async {
     final menuService = MenuSettingsService();
     final whiteRobeEnabled = await menuService.isWhiteRobeEnabled;
     final bookingEnabled = await menuService.isBookingEnabled;
     final debugRoomMenuEnabled = await menuService.isDebugRoomMenuEnabled;
-    
+
     setState(() {
       _whiteRobeEnabled = whiteRobeEnabled;
       _bookingEnabled = bookingEnabled;
       _debugRoomMenuEnabled = debugRoomMenuEnabled;
     });
   }
-  
+
   Future<void> _loadSystemInfo() async {
     try {
       final dbHelper = DbHelper();
       final allData = await dbHelper.fetchAll();
       // TODO: Get current stays count from stays table
       // TODO: Get actual database size
-      
+
       setState(() {
         _totalRegistered = allData.length;
         _currentStays = 12; // Placeholder
@@ -62,7 +62,7 @@ class _AdminSettingsState extends State<AdminSettings> {
       debugPrint('Error loading system info: $e');
     }
   }
-  
+
   Future<void> _showStatistics() async {
     showDialog(
       context: context,
@@ -94,7 +94,7 @@ class _AdminSettingsState extends State<AdminSettings> {
       ),
     );
   }
-  
+
   Future<void> _clearTestData() async {
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
@@ -120,7 +120,7 @@ class _AdminSettingsState extends State<AdminSettings> {
         ],
       ),
     );
-    
+
     if (confirmed == true) {
       try {
         // TODO: Implement clear test data logic
@@ -132,14 +132,14 @@ class _AdminSettingsState extends State<AdminSettings> {
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
         }
       }
     }
   }
-  
+
   Future<void> _createTestData() async {
     try {
       final dbHelper = DbHelper();
@@ -152,13 +152,13 @@ class _AdminSettingsState extends State<AdminSettings> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
       }
     }
   }
-  
+
   Future<void> _runSystemTest() async {
     try {
       final dbHelper = DbHelper();
@@ -175,13 +175,13 @@ class _AdminSettingsState extends State<AdminSettings> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาดในการทดสอบ: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาดในการทดสอบ: $e')));
       }
     }
   }
-  
+
   Future<void> _clearAllData() async {
     // Show double confirmation dialog
     final confirmed = await showDialog<bool>(
@@ -210,7 +210,7 @@ class _AdminSettingsState extends State<AdminSettings> {
         ],
       ),
     );
-    
+
     if (confirmed == true) {
       try {
         final dbHelper = DbHelper();
@@ -223,14 +223,14 @@ class _AdminSettingsState extends State<AdminSettings> {
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
         }
       }
     }
   }
-  
+
   Widget _buildSectionHeader(String title, IconData icon) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 24, 0, 12),
@@ -247,18 +247,18 @@ class _AdminSettingsState extends State<AdminSettings> {
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Container(
-              height: 1,
-              color: Colors.grey.shade300,
-            ),
-          ),
+          Expanded(child: Container(height: 1, color: Colors.grey.shade300)),
         ],
       ),
     );
   }
-  
-  Widget _buildMenuToggle(String label, bool value, ValueChanged<bool> onChanged, {bool isLocked = false}) {
+
+  Widget _buildMenuToggle(
+    String label,
+    bool value,
+    ValueChanged<bool> onChanged, {
+    bool isLocked = false,
+  }) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
@@ -268,18 +268,23 @@ class _AdminSettingsState extends State<AdminSettings> {
           color: isLocked ? Colors.grey : Colors.purple,
         ),
         title: Text(label),
-        trailing: isLocked 
-          ? const Text('ปิดไม่ได้', style: TextStyle(color: Colors.grey))
-          : Switch(
-              value: value,
-              onChanged: onChanged,
-              activeColor: Colors.purple,
-            ),
+        trailing: isLocked
+            ? const Text('ปิดไม่ได้', style: TextStyle(color: Colors.grey))
+            : Switch(
+                value: value,
+                onChanged: onChanged,
+                activeColor: Colors.purple,
+              ),
       ),
     );
   }
-  
-  Widget _buildActionButton(String label, IconData icon, VoidCallback onPressed, {Color? color}) {
+
+  Widget _buildActionButton(
+    String label,
+    IconData icon,
+    VoidCallback onPressed, {
+    Color? color,
+  }) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ListTile(
@@ -291,15 +296,20 @@ class _AdminSettingsState extends State<AdminSettings> {
       ),
     );
   }
-  
+
   Widget _buildInfoRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 14)),
-          Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 14))),
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
@@ -335,9 +345,10 @@ class _AdminSettingsState extends State<AdminSettings> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(value 
-                      ? 'เปิดเมนู "เบิกชุดขาว" แล้ว' 
-                      : 'ปิดเมนู "เบิกชุดขาว" แล้ว'
+                    content: Text(
+                      value
+                          ? 'เปิดเมนู "เบิกชุดขาว" แล้ว'
+                          : 'ปิดเมนู "เบิกชุดขาว" แล้ว',
                     ),
                   ),
                 );
@@ -351,15 +362,18 @@ class _AdminSettingsState extends State<AdminSettings> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(value 
-                      ? 'เปิดเมนู "จองที่พัก" แล้ว' 
-                      : 'ปิดเมนู "จองที่พัก" แล้ว'
+                    content: Text(
+                      value
+                          ? 'เปิดเมนู "จองที่พัก" แล้ว'
+                          : 'ปิดเมนู "จองที่พัก" แล้ว',
                     ),
                   ),
                 );
               }
             }),
-            _buildMenuToggle('Debug จองที่พัก', _debugRoomMenuEnabled, (value) async {
+            _buildMenuToggle('Debug จองที่พัก', _debugRoomMenuEnabled, (
+              value,
+            ) async {
               debugPrint('Setting Debug Room Menu to: $value');
               setState(() => _debugRoomMenuEnabled = value);
               await MenuSettingsService().setDebugRoomMenuEnabled(value);
@@ -367,48 +381,64 @@ class _AdminSettingsState extends State<AdminSettings> {
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(value 
-                      ? 'เปิด Debug Menu จองที่พักแล้ว' 
-                      : 'ปิด Debug Menu จองที่พักแล้ว'
+                    content: Text(
+                      value
+                          ? 'เปิด Debug Menu จองที่พักแล้ว'
+                          : 'ปิด Debug Menu จองที่พักแล้ว',
                     ),
                   ),
                 );
               }
             }),
             _buildMenuToggle('ตารางกิจกรรม', true, (value) {}, isLocked: true),
-            _buildMenuToggle('สรุปผลประจำวัน', true, (value) {}, isLocked: true),
-            
+            _buildMenuToggle(
+              'สรุปผลประจำวัน',
+              true,
+              (value) {},
+              isLocked: true,
+            ),
+
             // Data Management Section
             _buildSectionHeader('จัดการข้อมูล', Icons.storage),
             _buildActionButton('จัดการข้อมูล', Icons.storage, () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const DataManagementScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const DataManagementScreen(),
+                ),
               );
             }),
             _buildActionButton('จัดการแผนที่และห้องพัก', Icons.map, () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const MapManagementScreen()),
+                MaterialPageRoute(
+                  builder: (context) => const MapManagementScreen(),
+                ),
               );
             }),
             _buildActionButton('ทดสอบระบบ', Icons.science, _runSystemTest),
-            
+
             // Backup Section
             _buildSectionHeader('สำรองข้อมูล', Icons.save),
             _buildActionButton('Export ข้อมูลเป็น JSON', Icons.description, () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป')),
+                const SnackBar(
+                  content: Text('ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป'),
+                ),
               );
             }),
             _buildActionButton('Export รายงาน PDF', Icons.picture_as_pdf, () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป')),
+                const SnackBar(
+                  content: Text('ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป'),
+                ),
               );
             }),
             _buildActionButton('Import ข้อมูล', Icons.file_download, () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป')),
+                const SnackBar(
+                  content: Text('ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป'),
+                ),
               );
             }),
             Card(
@@ -422,9 +452,10 @@ class _AdminSettingsState extends State<AdminSettings> {
                     setState(() => _autoBackupEnabled = value);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(value 
-                          ? 'เปิด Auto Backup รายวันแล้ว' 
-                          : 'ปิด Auto Backup รายวันแล้ว'
+                        content: Text(
+                          value
+                              ? 'เปิด Auto Backup รายวันแล้ว'
+                              : 'ปิด Auto Backup รายวันแล้ว',
                         ),
                       ),
                     );
@@ -433,7 +464,7 @@ class _AdminSettingsState extends State<AdminSettings> {
                 ),
               ),
             ),
-            
+
             // System Info Section
             _buildSectionHeader('ข้อมูลระบบ', Icons.info),
             Card(
@@ -445,12 +476,15 @@ class _AdminSettingsState extends State<AdminSettings> {
                     _buildInfoRow('Database Version:', '4'),
                     _buildInfoRow('จำนวนผู้ลงทะเบียน:', '$_totalRegistered คน'),
                     _buildInfoRow('ผู้เข้าพักปัจจุบัน:', '$_currentStays คน'),
-                    _buildInfoRow('พื้นที่ DB:', '${_dbSizeKB.toStringAsFixed(1)} MB'),
+                    _buildInfoRow(
+                      'พื้นที่ DB:',
+                      '${_dbSizeKB.toStringAsFixed(1)} MB',
+                    ),
                   ],
                 ),
               ),
             ),
-            
+
             // Developer Tools Section
             _buildSectionHeader('Developer Tools', Icons.developer_mode),
             Card(
@@ -483,7 +517,7 @@ class _AdminSettingsState extends State<AdminSettings> {
                 },
               ),
             ),
-            
+
             const SizedBox(height: 24),
             Center(
               child: Row(
@@ -497,10 +531,7 @@ class _AdminSettingsState extends State<AdminSettings> {
                   const SizedBox(width: 4),
                   Text(
                     'เวอร์ชัน: v1.0.0 (Build 4)',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 12,
-                    ),
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                   ),
                 ],
               ),

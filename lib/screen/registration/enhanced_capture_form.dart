@@ -457,6 +457,43 @@ class _EnhancedCaptureFormState extends State<EnhancedCaptureForm>
 
               const SizedBox(height: 16),
 
+              // ปุ่ม Reset Connection แบบเด่น
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ElevatedButton.icon(
+                  onPressed: _resetCardReader,
+                  icon: const Icon(Icons.refresh_rounded, size: 24),
+                  label: const Text(
+                    '🔄 รีเซ็ตการเชื่อมต่อเครื่องอ่านบัตร',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 3,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                'หากการเชื่อมต่อเครื่องอ่านบัตรมีปัญหา กดปุ่มนี้เพื่อรีเซ็ตการเชื่อมต่อใหม่',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
               // ปุ่มตรวจสอบบัตรอีกครั้ง
               RecheckCardButton(
                 cardReaderService: _cardReaderService,

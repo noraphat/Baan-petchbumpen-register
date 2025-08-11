@@ -6,6 +6,7 @@ import 'dart:async';
 import '../../models/reg_data.dart';
 import '../../services/registration_service.dart';
 import '../../services/enhanced_card_reader_service.dart';
+import '../../services/card_reader_service.dart';
 import '../../services/db_helper.dart';
 import '../../widgets/shared_registration_dialog.dart';
 
@@ -172,6 +173,167 @@ class _CaptureFormState extends State<CaptureForm> {
         _isManualReading = false;
       });
     }
+  }
+
+  /// รีเซ็ตการเชื่อมต่อเครื่องอ่านบัตร
+  Future<void> _resetConnection() async {
+    setState(() {
+      _error = null;
+      _data = null;
+      _currentRegistration = null;
+    });
+
+    try {
+      // ล้าง stream subscriptions
+      if (_eventSubscription != null) {
+        await _eventSubscription!.cancel();
+        _eventSubscription = null;
+      }
+      if (_errorSubscription != null) {
+        await _errorSubscription!.cancel();
+        _errorSubscription = null;
+      }
+      if (_statusSubscription != null) {
+        await _statusSubscription!.cancel();
+        _statusSubscription = null;
+      }
+
+      // ใช้ CardReaderService สำหรับรีเซ็ตแบบขั้นสูง
+      try {
+        final cardReaderService = CardReaderService();
+        await cardReaderService.resetConnection();
+        
+        // ตรวจสอบว่าต้องใช้การรีเซ็ต USB จริงหรือไม่
+        if (cardReaderService.shouldUsePhysicalReset()) {
+          _showPhysicalResetDialog(cardReaderService);
+          return;
+        }
+        
+      } catch (e) {
+        debugPrint('Enhanced card reader reset failed: $e');
+        // แสดง dialog คำแนะนำการรีเซ็ต USB จริง
+        _showPhysicalResetDialog(CardReaderService());
+        return;
+      }
+
+      // เริ่มต้น device handler stream ใหม่
+      await Future.delayed(const Duration(milliseconds: 500));
+      ThaiIdcardReaderFlutter.deviceHandlerStream.listen(_onUSB);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('รีเซ็ตการเชื่อมต่อเรียบร้อย - ลองอ่านบัตรประชาชนได้เลย'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Connection reset failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ไม่สามารถรีเซ็ตการเชื่อมต่อได้: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  /// แสดง dialog คำแนะนำการรีเซ็ต USB จริง
+  void _showPhysicalResetDialog(CardReaderService cardReaderService) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.usb_off, color: Colors.orange, size: 24),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'ต้องรีเซ็ต USB จริง',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info, color: Colors.orange.shade600, size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'ระบบไม่สามารถรีเซ็ต USB ได้',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Plugin thai_idcard_reader_flutter ไม่รองรับการรีเซ็ต USB ระดับฮาร์ดแวร์',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                cardReaderService.getPhysicalResetInstructions(),
+                style: const TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('ปิด'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              // ลองรีเซ็ตแบบเร็วอีกครั้งหลังจากผู้ใช้ทำตามคำแนะนำ
+              await Future.delayed(const Duration(seconds: 2));
+              await cardReaderService.quickResetConnection();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('รีเซ็ตเสร็จแล้ว - ลองอ่านบัตรประชาชนได้เลย'),
+                    backgroundColor: Colors.blue,
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              }
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('ทำตามคำแนะนำแล้ว'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Show error dialog for recheck card failures
@@ -558,6 +720,14 @@ class _CaptureFormState extends State<CaptureForm> {
       appBar: AppBar(
         title: const Text('อ่านบัตรประชาชน'),
         centerTitle: true,
+        actions: [
+          // ปุ่ม Reset Connection
+          IconButton(
+            onPressed: _resetConnection,
+            icon: const Icon(Icons.refresh),
+            tooltip: 'รีเซ็ตการเชื่อมต่อเครื่องอ่านบัตร',
+          ),
+        ],
       ),
       floatingActionButton: _device != null && _device!.hasPermission && !(_isReading || _isProcessing || _isManualReading)
           ? FloatingActionButton.extended(
@@ -614,6 +784,42 @@ class _CaptureFormState extends State<CaptureForm> {
                 title: 'เสียบบัตรประชาชน',
                 subtitle: 'กรุณาเสียบบัตรประชาชนเพื่อเริ่มอ่านข้อมูล',
                 color: Colors.blue,
+              ),
+            ],
+
+            // Reset Connection Button - เด่นกว่า Recheck Card เมื่อไม่มีอุปกรณ์
+            if (_device == null || !_device!.hasPermission) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ElevatedButton.icon(
+                  onPressed: _resetConnection,
+                  icon: const Icon(Icons.refresh_rounded, size: 24),
+                  label: const Text(
+                    '🔄 รีเซ็ตการเชื่อมต่อเครื่องอ่านบัตร',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 3,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'หากไม่พบเครื่องอ่านบัตรหรือการเชื่อมต่อมีปัญหา กดปุ่มนี้เพื่อลองเชื่อมต่อใหม่',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ],
 

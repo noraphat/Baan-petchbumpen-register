@@ -740,7 +740,12 @@ class _MapManagementScreenState extends State<MapManagementScreen>
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           title: Text(isEditing ? 'แก้ไขห้องพัก' : 'เพิ่มห้องพักใหม่'),
-          content: SizedBox(
+          contentPadding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: double.maxFinite,
+              maxHeight: MediaQuery.of(context).size.height * 0.7,
+            ),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -759,11 +764,16 @@ class _MapManagementScreenState extends State<MapManagementScreen>
                     labelText: 'ขนาดห้อง',
                     border: OutlineInputBorder(),
                   ),
+                  isExpanded: true,
                   items: RoomSize.values
                       .map(
                         (size) => DropdownMenuItem(
                           value: size,
-                          child: Text('${size.code} - ${size.displayName}'),
+                          child: Text(
+                            '${size.code} - ${size.displayName}',
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
                         ),
                       )
                       .toList(),
@@ -771,36 +781,51 @@ class _MapManagementScreenState extends State<MapManagementScreen>
                       setDialogState(() => selectedSize = size!),
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<RoomShape>(
-                  value: selectedShape,
-                  decoration: const InputDecoration(
-                    labelText: 'รูปร่างห้อง',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: RoomShape.values
-                      .map(
-                        (shape) => DropdownMenuItem(
-                          value: shape,
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 20,
-                                height: 12,
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withValues(alpha: 0.6),
-                                  border: Border.all(color: Colors.blue, width: 1),
-                                  borderRadius: BorderRadius.circular(2),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    return DropdownButtonFormField<RoomShape>(
+                      value: selectedShape,
+                      decoration: const InputDecoration(
+                        labelText: 'รูปร่างห้อง',
+                        border: OutlineInputBorder(),
+                      ),
+                      isExpanded: true,
+                      items: RoomShape.values
+                          .map(
+                            (shape) => DropdownMenuItem(
+                              value: shape,
+                              child: SizedBox(
+                                width: constraints.maxWidth - 40, // เผื่อ padding
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 20,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.withValues(alpha: 0.6),
+                                        border: Border.all(color: Colors.blue, width: 1),
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        shape.displayName,
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Text(shape.displayName),
-                            ],
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (shape) =>
-                      setDialogState(() => selectedShape = shape!),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (shape) =>
+                          setDialogState(() => selectedShape = shape!),
+                    );
+                  },
                 ),
                 const SizedBox(height: 16),
                 TextField(

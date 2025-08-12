@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:thai_idcard_reader_flutter/thai_idcard_reader_flutter.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
@@ -10,6 +11,8 @@ import '../../services/card_reader_service.dart';
 import '../../services/db_helper.dart';
 import '../../widgets/shared_registration_dialog.dart';
 import '../../utils/privacy_utils.dart';
+import '../../widgets/card_reader_widgets.dart';
+import '../../widgets/unified_registration_dialog.dart';
 
 /// Unified ID card registration form that uses the new service architecture
 /// This implements the core requirement for unified registration logic
@@ -22,7 +25,7 @@ class UnifiedCaptureForm extends StatefulWidget {
 
 class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
   final RegistrationService _registrationService = RegistrationService();
-  
+
   ThaiIDCard? _data;
   UsbDevice? _device;
   String? _error;
@@ -36,6 +39,36 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
     super.initState();
     // Listen to USB device events
     ThaiIdcardReaderFlutter.deviceHandlerStream.listen(_onUSB);
+    // Check for already connected devices
+    _checkExistingConnection();
+  }
+
+  /// Check if there's already a connected USB device when the screen starts
+  Future<void> _checkExistingConnection() async {
+    try {
+      // Small delay to let the stream listener initialize first
+      await Future.delayed(const Duration(milliseconds: 800));
+
+      // Try to perform a card read to trigger device detection
+      // If device is connected, this will either read the card or fail gracefully
+      try {
+        debugPrint(
+          '🔍 UnifiedCaptureForm: Checking for existing card reader connection...',
+        );
+        await ThaiIdcardReaderFlutter.read();
+        debugPrint('✅ UnifiedCaptureForm: Card reader connection detected');
+      } catch (e) {
+        debugPrint(
+          '⚠️ UnifiedCaptureForm: No card reader or card detected (this is normal) - $e',
+        );
+        // This is expected if no device is connected or no card is inserted
+      }
+    } catch (e) {
+      debugPrint(
+        '⚠️ UnifiedCaptureForm: Could not check existing connection - $e',
+      );
+      // This is not a critical error, just log it
+    }
   }
 
   void _onUSB(usbEvent) {
@@ -75,7 +108,7 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
 
   Future<void> _readCard() async {
     if (_isReading) return;
-    
+
     setState(() {
       _isReading = true;
       _error = null;
@@ -87,10 +120,9 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
         _data = result;
         _error = null;
       });
-      
+
       // Process card data using unified logic
       await _processCardDataUnified(result);
-      
     } catch (e) {
       setState(() {
         _error = 'ไม่สามารถอ่านข้อมูลจากบัตรประชาชนได้: $e';
@@ -106,7 +138,7 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
   /// Manual card reading function triggered by button
   Future<void> _recheckCard() async {
     if (_isManualReading || _isReading || _isProcessing) return;
-    
+
     setState(() {
       _isManualReading = true;
       _error = null;
@@ -116,17 +148,17 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
 
     try {
       await Future.delayed(const Duration(milliseconds: 300));
-      
+
       var result = await ThaiIdcardReaderFlutter.read();
-      
+
       if (result.cid != null) {
         setState(() {
           _data = result;
           _error = null;
         });
-        
+
         await _processCardDataUnified(result);
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -139,12 +171,11 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
       } else {
         throw Exception('ไม่พบข้อมูลบัตรประชาชน');
       }
-      
     } catch (e) {
       setState(() {
         _error = 'ไม่สามารถอ่านบัตรประชาชนได้: $e';
       });
-      
+
       if (mounted) {
         _showRecheckErrorDialog(e.toString());
       }
@@ -170,13 +201,12 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
       try {
         final cardReaderService = CardReaderService();
         await cardReaderService.resetConnection();
-        
+
         // ตรวจสอบว่าต้องใช้การรีเซ็ต USB จริงหรือไม่
         if (cardReaderService.shouldUsePhysicalReset()) {
           _showPhysicalResetDialog(cardReaderService);
           return;
         }
-        
       } catch (e) {
         debugPrint('Enhanced reset failed: $e');
         // แสดง dialog คำแนะนำการรีเซ็ต USB จริง
@@ -259,7 +289,11 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.info, color: Colors.orange.shade600, size: 20),
+                        Icon(
+                          Icons.info,
+                          color: Colors.orange.shade600,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         const Text(
                           'ระบบไม่สามารถรีเซ็ต USB ได้',
@@ -392,11 +426,13 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
       debugPrint('🆔 Processing ID card: $cid');
 
       // Step 1: Check if user exists
-      final existingReg = await _registrationService.findExistingRegistration(cid);
-      
+      final existingReg = await _registrationService.findExistingRegistration(
+        cid,
+      );
+
       // Step 2: Get latest stay using unified service
       final latestStay = await StayService.getLatestStay(cid);
-      
+
       // Step 3: Determine mode (CREATE vs EDIT)
       final stayStatus = await StayService.getStayStatus(cid);
       final isEditMode = stayStatus['isEditMode'] as bool;
@@ -418,9 +454,12 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
       } else {
         // Upgrade manual registration to ID card
         debugPrint('⬆️ Upgrading manual to ID card');
-        final confirmed = await _showUpgradeConfirmDialog(existingReg, cardData);
+        final confirmed = await _showUpgradeConfirmDialog(
+          existingReg,
+          cardData,
+        );
         if (confirmed != true) return;
-        
+
         regData = await _handleUpgradeToCard(existingReg, cardData);
       }
 
@@ -431,8 +470,13 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
       // Step 4: Load existing additional info if in edit mode
       RegAdditionalInfo? existingAdditionalInfo;
       if (isEditMode && latestStay != null) {
-        existingAdditionalInfo = await StayService.getAdditionalInfoForStay(cid, latestStay);
-        debugPrint('📦 Loaded existing additional info: ${existingAdditionalInfo?.visitId}');
+        existingAdditionalInfo = await StayService.getAdditionalInfoForStay(
+          cid,
+          latestStay,
+        );
+        debugPrint(
+          '📦 Loaded existing additional info: ${existingAdditionalInfo?.visitId}',
+        );
       }
 
       // Step 5: Show unified registration dialog
@@ -444,7 +488,6 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
           existingAdditionalInfo: existingAdditionalInfo,
         );
       }
-
     } catch (e) {
       debugPrint('❌ Error processing card: $e');
       _showErrorDialog('เกิดข้อผิดพลาดในการประมวลผล: $e');
@@ -476,7 +519,10 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
   }
 
   /// Handle upgrade from manual to ID card
-  Future<RegData> _handleUpgradeToCard(RegData existingReg, ThaiIDCard cardData) async {
+  Future<RegData> _handleUpgradeToCard(
+    RegData existingReg,
+    ThaiIDCard cardData,
+  ) async {
     final updatedReg = await _registrationService.upgradeToIdCard(
       id: cardData.cid!,
       first: cardData.firstnameTH ?? '',
@@ -496,7 +542,10 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
   }
 
   /// Show upgrade confirmation dialog
-  Future<bool?> _showUpgradeConfirmDialog(RegData existingReg, ThaiIDCard cardData) {
+  Future<bool?> _showUpgradeConfirmDialog(
+    RegData existingReg,
+    ThaiIDCard cardData,
+  ) {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -510,19 +559,21 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
-            
+
             const Text('ข้อมูลเดิม:'),
             Text('ชื่อ-นามสกุล: ${existingReg.first} ${existingReg.last}'),
             Text('วันเกิด: ${existingReg.dob}'),
             Text('เพศ: ${existingReg.gender}'),
             const SizedBox(height: 12),
-            
+
             const Text('ข้อมูลจากบัตร:'),
-            Text('ชื่อ-นามสกุล: ${cardData.firstnameTH} ${cardData.lastnameTH}'),
+            Text(
+              'ชื่อ-นามสกุล: ${cardData.firstnameTH} ${cardData.lastnameTH}',
+            ),
             Text('วันเกิด: ${cardData.birthdate}'),
             Text('เพศ: ${cardData.gender == 1 ? 'ชาย' : 'หญิง'}'),
             const SizedBox(height: 16),
-            
+
             const Text(
               'ต้องการอัปเดตข้อมูลจากบัตรประชาชนหรือไม่?',
               style: TextStyle(fontWeight: FontWeight.bold),
@@ -578,12 +629,11 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
         final stayStatus = await DbHelper().checkStayStatus(regData.id);
         finalLatestStay = stayStatus['latestStay'] as StayRecord?;
         finalCanCreateNew = stayStatus['canCreateNew'] as bool;
-        
+
         if (finalLatestStay != null) {
           debugPrint('📅 โหลด stay record: ${finalLatestStay?.id}');
         }
       }
-
     } catch (e) {
       debugPrint('❌ เกิดข้อผิดพลาดในการโหลดข้อมูลเพิ่มเติม: $e');
     }
@@ -601,11 +651,15 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
         onCompleted: () {
           Navigator.pop(ctx); // Close registration dialog
           Navigator.pop(context); // Return to menu
-          
+
           // Show success message
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(finalCanCreateNew ? 'ลงทะเบียนเสร็จสิ้น' : 'อัปเดตข้อมูลเรียบร้อยแล้ว'),
+              content: Text(
+                finalCanCreateNew
+                    ? 'ลงทะเบียนเสร็จสิ้น'
+                    : 'อัปเดตข้อมูลเรียบร้อยแล้ว',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -677,9 +731,10 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
           ),
         ],
       ),
-      floatingActionButton: _device != null && 
-          _device!.hasPermission && 
-          !(_isReading || _isProcessing || _isManualReading)
+      floatingActionButton:
+          _device != null &&
+              _device!.hasPermission &&
+              !(_isReading || _isProcessing || _isManualReading)
           ? FloatingActionButton.extended(
               onPressed: _recheckCard,
               icon: const Icon(Icons.refresh),
@@ -699,16 +754,24 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
               Card(
                 child: ListTile(
                   leading: const Icon(Icons.usb, size: 32),
-                  title: Text('${_device!.manufacturerName} ${_device!.productName}'),
+                  title: Text(
+                    '${_device!.manufacturerName} ${_device!.productName}',
+                  ),
                   subtitle: Text(_device!.identifier ?? ''),
                   trailing: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: _device!.hasPermission ? Colors.green : Colors.grey,
+                      color: _device!.hasPermission
+                          ? Colors.green
+                          : Colors.grey,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      _device!.hasPermission ? 'เชื่อมต่อแล้ว' : (_device!.isAttached ? 'เชื่อมต่อ' : 'ไม่เชื่อมต่อ'),
+                      _device!.hasPermission
+                          ? 'เชื่อมต่อแล้ว'
+                          : (_device!.isAttached
+                                ? 'เชื่อมต่อ'
+                                : 'ไม่เชื่อมต่อ'),
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -728,7 +791,8 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
                 subtitle: 'กรุณาเชื่อมต่อเครื่องอ่านบัตรประชาชน',
                 color: Colors.orange,
               ),
-            ] else if (_data == null && (_device != null && _device!.hasPermission)) ...[
+            ] else if (_data == null &&
+                (_device != null && _device!.hasPermission)) ...[
               _buildStatusCard(
                 icon: Icons.credit_card,
                 title: 'เสียบบัตรประชาชน',
@@ -774,7 +838,9 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
             ],
 
             // Recheck Card Button
-            if (_device != null && _device!.hasPermission && !(_isReading || _isProcessing || _isManualReading)) ...[
+            if (_device != null &&
+                _device!.hasPermission &&
+                !(_isReading || _isProcessing || _isManualReading)) ...[
               const SizedBox(height: 16),
               Container(
                 width: double.infinity,
@@ -821,9 +887,11 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
                       const CircularProgressIndicator(),
                       const SizedBox(width: 16),
                       Text(
-                        _isManualReading 
-                            ? 'กำลังตรวจสอบบัตร...' 
-                            : (_isReading ? 'กำลังอ่านข้อมูล...' : 'กำลังประมวลผล...'),
+                        _isManualReading
+                            ? 'กำลังตรวจสอบบัตร...'
+                            : (_isReading
+                                  ? 'กำลังอ่านข้อมูล...'
+                                  : 'กำลังประมวลผล...'),
                         style: const TextStyle(fontSize: 16),
                       ),
                     ],
@@ -845,28 +913,39 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
                       Row(
                         children: [
                           Icon(
-                            _currentRegistration!.hasIdCard 
-                                ? Icons.verified_user 
+                            _currentRegistration!.hasIdCard
+                                ? Icons.verified_user
                                 : Icons.person,
-                            color: _currentRegistration!.hasIdCard 
-                                ? Colors.green 
+                            color: _currentRegistration!.hasIdCard
+                                ? Colors.green
                                 : Colors.orange,
                           ),
                           const SizedBox(width: 8),
                           const Text(
                             'สถานะการลงทะเบียน',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
                       const Divider(),
-                      Text('ชื่อ-นามสกุล: ${_currentRegistration!.first} ${_currentRegistration!.last}'),
-                      Text('เลขบัตรประชาชน: ${PrivacyUtils.maskThaiIdCard(_currentRegistration!.id)}'),
-                      Text('สถานะบัตร: ${_currentRegistration!.hasIdCard ? "ใช้บัตรประชาชน" : "ลงทะเบียนแบบ Manual"}'),
+                      Text(
+                        'ชื่อ-นามสกุล: ${_currentRegistration!.first} ${_currentRegistration!.last}',
+                      ),
+                      Text(
+                        'เลขบัตรประชาชน: ${PrivacyUtils.maskThaiIdCard(_currentRegistration!.id)}',
+                      ),
+                      Text(
+                        'สถานะบัตร: ${_currentRegistration!.hasIdCard ? "ใช้บัตรประชาชน" : "ลงทะเบียนแบบ Manual"}',
+                      ),
                       Text(
                         'การแก้ไข: ${_currentRegistration!.hasIdCard ? "ห้ามแก้ไขข้อมูลส่วนตัว" : "สามารถแก้ไขได้"}',
                         style: TextStyle(
-                          color: _currentRegistration!.hasIdCard ? Colors.red : Colors.green,
+                          color: _currentRegistration!.hasIdCard
+                              ? Colors.red
+                              : Colors.green,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -879,7 +958,7 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
             // Card Data Display
             if (_data != null) ...[
               const SizedBox(height: 16),
-              
+
               // Photo
               if (_data!.photo.isNotEmpty) ...[
                 Card(
@@ -887,7 +966,13 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        const Text('รูปภาพ', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const Text(
+                          'รูปภาพ',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         Container(
                           decoration: BoxDecoration(
@@ -915,23 +1000,48 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('ข้อมูลส่วนตัว', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const Text(
+                        'ข้อมูลส่วนตัว',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const Divider(),
-                      if (_data!.cid != null) _buildInfoRow('เลขบัตรประชาชน', PrivacyUtils.maskThaiIdCard(_data!.cid!)),
+                      if (_data!.cid != null)
+                        _buildInfoRow(
+                          'เลขบัตรประชาชน',
+                          PrivacyUtils.maskThaiIdCard(_data!.cid!),
+                        ),
                       if (_data!.titleTH != null && _data!.firstnameTH != null)
-                        _buildInfoRow('ชื่อ-นามสกุล (ไทย)', '${_data!.titleTH} ${_data!.firstnameTH} ${_data!.lastnameTH ?? ''}'),
+                        _buildInfoRow(
+                          'ชื่อ-นามสกุล (ไทย)',
+                          '${_data!.titleTH} ${_data!.firstnameTH} ${_data!.lastnameTH ?? ''}',
+                        ),
                       if (_data!.titleEN != null && _data!.firstnameEN != null)
-                        _buildInfoRow('ชื่อ-นามสกุล (อังกฤษ)', '${_data!.titleEN} ${_data!.firstnameEN} ${_data!.lastnameEN ?? ''}'),
+                        _buildInfoRow(
+                          'ชื่อ-นามสกุล (อังกฤษ)',
+                          '${_data!.titleEN} ${_data!.firstnameEN} ${_data!.lastnameEN ?? ''}',
+                        ),
                       if (_data!.gender != null)
-                        _buildInfoRow('เพศ', _data!.gender == 1 ? 'ชาย' : 'หญิง'),
+                        _buildInfoRow(
+                          'เพศ',
+                          _data!.gender == 1 ? 'ชาย' : 'หญิง',
+                        ),
                       if (_data!.birthdate != null)
                         _buildInfoRow('วันเกิด', _formatDate(_data!.birthdate)),
                       if (_data!.address != null)
                         _buildInfoRow('ที่อยู่', _data!.address!),
                       if (_data!.issueDate != null)
-                        _buildInfoRow('วันออกบัตร', _formatDate(_data!.issueDate)),
+                        _buildInfoRow(
+                          'วันออกบัตร',
+                          _formatDate(_data!.issueDate),
+                        ),
                       if (_data!.expireDate != null)
-                        _buildInfoRow('วันหมดอายุ', _formatDate(_data!.expireDate)),
+                        _buildInfoRow(
+                          'วันหมดอายุ',
+                          _formatDate(_data!.expireDate),
+                        ),
                     ],
                   ),
                 ),
@@ -991,10 +1101,7 @@ class _UnifiedCaptureFormState extends State<UnifiedCaptureForm> {
             ),
           ),
           Expanded(
-            child: SelectableText(
-              value,
-              style: const TextStyle(fontSize: 16),
-            ),
+            child: SelectableText(value, style: const TextStyle(fontSize: 16)),
           ),
         ],
       ),

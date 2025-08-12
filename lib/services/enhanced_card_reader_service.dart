@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'card_reader_service.dart';
 
 /// Enhanced card reader service with automatic detection and caching
 class EnhancedCardReaderService {
@@ -11,6 +12,9 @@ class EnhancedCardReaderService {
   DateTime? _lastProcessedTime;
   bool _isPolling = false;
   bool _isProcessing = false;
+
+  // ใช้ CardReaderService จริง
+  final CardReaderService _cardReaderService = CardReaderService();
 
   final StreamController<CardReaderEvent> _eventController =
       StreamController<CardReaderEvent>.broadcast();
@@ -30,21 +34,73 @@ class EnhancedCardReaderService {
   /// Initialize the card reader service
   Future<bool> initialize() async {
     try {
-      // Check if card reader is connected
-      final isConnected = await _checkReaderConnection();
+      debugPrint('🔧 EnhancedCardReaderService: เริ่มต้นระบบ...');
+      
+      // เริ่มต้น CardReaderService จริง
+      await _cardReaderService.initialize();
+      
+      // ตรวจสอบการเชื่อมต่อ
+      final isConnected = await _cardReaderService.checkConnection();
 
       if (isConnected) {
+        debugPrint('✅ EnhancedCardReaderService: เชื่อมต่อสำเร็จ');
         _updateStatus(CardReaderStatus.connected);
         await _performInitialCardCheck();
         return true;
       } else {
+        debugPrint('❌ EnhancedCardReaderService: ไม่สามารถเชื่อมต่อได้');
         _updateStatus(CardReaderStatus.disconnected);
         _emitError('Card reader not connected');
         return false;
       }
     } catch (e) {
+      debugPrint('❌ EnhancedCardReaderService: เริ่มต้นล้มเหลว - $e');
       _updateStatus(CardReaderStatus.error);
       _emitError('Failed to initialize card reader: $e');
+      return false;
+    }
+  }
+
+  /// ตรวจสอบและฟื้นฟูการเชื่อมต่อ (สำหรับกรณีที่กลับมาหน้า card reader)
+  Future<bool> ensureConnection() async {
+    try {
+      debugPrint(
+        '🔧 EnhancedCardReaderService: ตรวจสอบและฟื้นฟูการเชื่อมต่อ...',
+      );
+
+      // 1. ใช้ ensureConnection จาก CardReaderService ที่มีการตรวจสอบแบบแข็งแกร่ง
+      final isConnected = await _cardReaderService.ensureConnection();
+
+      if (isConnected) {
+        debugPrint(
+          '✅ EnhancedCardReaderService: การเชื่อมต่อปัจจุบันใช้งานได้',
+        );
+        _updateStatus(CardReaderStatus.connected);
+        return true;
+      }
+
+      // 2. ถ้าไม่สำเร็จ ให้ลองรีเซ็ตการเชื่อมต่อ
+      debugPrint('🔄 EnhancedCardReaderService: ลองรีเซ็ตการเชื่อมต่อ...');
+      _updateStatus(CardReaderStatus.disconnected);
+
+      // 3. รีเซ็ตการเชื่อมต่อแบบเร็ว
+      await _cardReaderService.quickResetConnection();
+
+      // 4. ตรวจสอบอีกครั้ง
+      final isReconnected = await _cardReaderService.checkConnection();
+      
+      if (isReconnected) {
+        debugPrint('✅ EnhancedCardReaderService: รีเซ็ตและเชื่อมต่อสำเร็จ');
+        _updateStatus(CardReaderStatus.connected);
+        return true;
+      } else {
+        debugPrint('❌ EnhancedCardReaderService: ไม่สามารถฟื้นฟูการเชื่อมต่อได้');
+        _updateStatus(CardReaderStatus.disconnected);
+        return false;
+      }
+    } catch (e) {
+      debugPrint('❌ EnhancedCardReaderService: ฟื้นฟูการเชื่อมต่อล้มเหลว - $e');
+      _updateStatus(CardReaderStatus.error);
       return false;
     }
   }
@@ -212,46 +268,45 @@ class EnhancedCardReaderService {
     await _checkForCard(forceCheck: true);
   }
 
-  /// Mock function to check reader connection
-  /// Replace this with actual hardware detection logic
+  /// Check reader connection using CardReaderService
   Future<bool> _checkReaderConnection() async {
-    // TODO: Implement actual hardware detection
-    // For now, simulate connection check
-    await Future.delayed(const Duration(milliseconds: 500));
-    return true; // Assume connected for development
+    try {
+      return await _cardReaderService.checkConnection();
+    } catch (e) {
+      debugPrint('Error checking reader connection: $e');
+      return false;
+    }
   }
 
-  /// Read ID card data
-  /// This should call your existing readIdCard() function
+  /// Read ID card data using CardReaderService
   Future<Map<String, dynamic>?> _readIdCard() async {
     try {
-      // TODO: Replace this with your actual readIdCard() implementation
-      // For development, return mock data or null
-
-      // Example implementation:
-      // final result = await YourCardReaderPlugin.readIdCard();
-      // return result;
-
-      // Mock implementation for development
-      await Future.delayed(const Duration(milliseconds: 300));
-
-      // Return null to simulate no card (replace with actual implementation)
+      // ใช้ CardReaderService จริงในการอ่านบัตร
+      final cardData = await _cardReaderService.readCard();
+      
+      if (cardData != null && cardData.isValid) {
+        return {
+          'cid': cardData.cid,
+          'firstnameTH': cardData.firstnameTH ?? '',
+          'lastnameTH': cardData.lastnameTH ?? '',
+          'titleTH': cardData.titleTH ?? '',
+          'birthdate': cardData.birthdate ?? '',
+          'gender': cardData.gender ?? 0,
+          'address': cardData.address ?? '',
+        };
+      }
+      
       return null;
-
-      // Uncomment below for testing with mock data:
-      /*
-      return {
-        'cid': '1234567890123',
-        'firstnameTH': 'สมชาย',
-        'lastnameTH': 'ใจดี',
-        'titleTH': 'นาย',
-        'birthdate': '1990-01-01',
-        'gender': 1, // 1 = male, 2 = female
-        'address': '123 หมู่ 1 ตำบล... อำเภอ... จังหวัด...',
-      };
-      */
     } catch (e) {
       debugPrint('Error reading ID card: $e');
+      
+      // ถ้าเป็น CardReaderException ให้ส่งต่อ error message
+      if (e is CardReaderException) {
+        _emitError(e.message);
+      } else {
+        _emitError('เกิดข้อผิดพลาดในการอ่านบัตร: $e');
+      }
+      
       return null;
     }
   }
@@ -295,6 +350,7 @@ class EnhancedCardReaderService {
     _eventController.close();
     _errorController.close();
     _statusController.close();
+    // ไม่ต้อง dispose CardReaderService เพราะเป็น singleton
     debugPrint('Enhanced card reader service disposed');
   }
 }

@@ -21,9 +21,10 @@ class AutoCardReaderWidget extends StatefulWidget {
 }
 
 class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
-  final EnhancedCardReaderService _cardReaderService = EnhancedCardReaderService();
+  final EnhancedCardReaderService _cardReaderService =
+      EnhancedCardReaderService();
   final RegistrationService _registrationService = RegistrationService();
-  
+
   late StreamSubscription _eventSubscription;
   late StreamSubscription _errorSubscription;
   late StreamSubscription _statusSubscription;
@@ -42,30 +43,108 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
   }
 
   @override
-  void dispose() {
-    _eventSubscription.cancel();
-    _errorSubscription.cancel();
-    _statusSubscription.cancel();
-    _cardReaderService.dispose();
-    super.dispose();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ตรวจสอบการเชื่อมต่อเมื่อ dependencies เปลี่ยน (เช่น เมื่อกลับมาหน้า)
+    _checkConnectionOnPageReturn();
+  }
+
+  /// ตรวจสอบการเชื่อมต่อเมื่อกลับมาหน้า card reader
+  Future<void> _checkConnectionOnPageReturn() async {
+    // รอให้ widget ทำงานเสร็จก่อน
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    if (mounted) {
+      debugPrint(
+        '🔄 AutoCardReaderWidget: ตรวจสอบการเชื่อมต่อเมื่อกลับมาหน้า...',
+      );
+
+      // ตรวจสอบการเชื่อมต่อแบบแข็งแกร่ง
+      final isConnected = await _cardReaderService.ensureConnection();
+
+      if (isConnected) {
+        setState(() {
+          _statusMessage = 'เครื่องอ่านบัตรพร้อมใช้งาน - ตรวจพบเครื่องอ่านบัตรที่เสียบอยู่แล้ว';
+        });
+
+        // หากกำลัง monitoring อยู่ ให้เริ่มใหม่
+        if (_currentStatus == CardReaderStatus.monitoring) {
+          await _startMonitoring();
+        } else {
+          // ถ้าไม่ได้ monitoring ให้เริ่มอัตโนมัติ
+          await _startMonitoring();
+        }
+      } else {
+        setState(() {
+          _statusMessage = 'ไม่พบเครื่องอ่านบัตร - กรุณาเสียบ USB';
+        });
+        
+        // ลองรีเซ็ตการเชื่อมต่อแบบแข็งแกร่ง
+        await _performAdvancedReconnection();
+      }
+    }
+  }
+
+  /// ดำเนินการเชื่อมต่อใหม่แบบขั้นสูง
+  Future<void> _performAdvancedReconnection() async {
+    if (!mounted) return;
+
+    debugPrint('🔧 AutoCardReaderWidget: ลองเชื่อมต่อใหม่แบบขั้นสูง...');
+    
+    setState(() {
+      _statusMessage = 'กำลังลองเชื่อมต่อเครื่องอ่านบัตรใหม่...';
+    });
+
+    try {
+      // รอสักครู่
+      await Future.delayed(const Duration(seconds: 1));
+      
+      // ลองเริ่มต้นใหม่
+      final success = await _cardReaderService.initialize();
+      
+      if (success && mounted) {
+        setState(() {
+          _statusMessage = 'เชื่อมต่อเครื่องอ่านบัตรสำเร็จ';
+        });
+        
+        // เริ่ม monitoring
+        await _startMonitoring();
+      } else if (mounted) {
+        setState(() {
+          _statusMessage = 'ไม่สามารถเชื่อมต่อเครื่องอ่านบัตรได้ - กรุณาตรวจสอบการเสียบ USB';
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _statusMessage = 'เกิดข้อผิดพลาดในการเชื่อมต่อ: $e';
+        });
+      }
+    }
   }
 
   /// Setup stream listeners
   void _setupListeners() {
     // Listen to card reader events
-    _eventSubscription = _cardReaderService.eventStream.listen(_handleCardReaderEvent);
-    
+    _eventSubscription = _cardReaderService.eventStream.listen(
+      _handleCardReaderEvent,
+    );
+
     // Listen to errors
-    _errorSubscription = _cardReaderService.errorStream.listen(_handleCardReaderError);
-    
+    _errorSubscription = _cardReaderService.errorStream.listen(
+      _handleCardReaderError,
+    );
+
     // Listen to status changes
-    _statusSubscription = _cardReaderService.statusStream.listen(_handleStatusChange);
+    _statusSubscription = _cardReaderService.statusStream.listen(
+      _handleStatusChange,
+    );
   }
 
   /// Initialize card reader
   Future<void> _initializeCardReader() async {
     final success = await _cardReaderService.initialize();
-    
+
     if (success && widget.autoStart) {
       await _startMonitoring();
     }
@@ -73,6 +152,17 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
 
   /// Start card monitoring
   Future<void> _startMonitoring() async {
+    // ตรวจสอบการเชื่อมต่อก่อนเริ่ม monitoring
+    final isConnected = await _cardReaderService.ensureConnection();
+
+    if (!isConnected) {
+      setState(() {
+        _statusMessage = 'ไม่สามารถเชื่อมต่อเครื่องอ่านบัตรได้';
+        _currentStatus = CardReaderStatus.disconnected;
+      });
+      return;
+    }
+
     final success = await _cardReaderService.startMonitoring();
     if (success) {
       setState(() {
@@ -119,7 +209,9 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
 
     try {
       // Check if registration already exists
-      final existingReg = await _registrationService.findExistingRegistration(cardData.id);
+      final existingReg = await _registrationService.findExistingRegistration(
+        cardData.id,
+      );
 
       if (existingReg == null) {
         // Scenario 1: First time with ID card
@@ -156,7 +248,7 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
       setState(() {
         _statusMessage = 'ลงทะเบียนด้วยบัตรประชาชนสำเร็จ';
       });
-      
+
       _showRegistrationDialog(regData, isFirstTime: true);
     } else {
       _showErrorDialog('ข้อผิดพลาด', 'ไม่สามารถลงทะเบียนได้');
@@ -173,9 +265,12 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
   }
 
   /// Handle upgrade from manual to ID card
-  Future<void> _handleUpgradeToCard(IdCardData cardData, RegData existingReg) async {
+  Future<void> _handleUpgradeToCard(
+    IdCardData cardData,
+    RegData existingReg,
+  ) async {
     final confirmed = await _showUpgradeConfirmDialog(cardData, existingReg);
-    
+
     if (confirmed == true) {
       final updatedReg = await _registrationService.upgradeToIdCard(
         id: cardData.id,
@@ -249,13 +344,13 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
         isFirstTime: isFirstTime,
         onCompleted: (additionalInfo) {
           Navigator.pop(context);
-          
+
           setState(() {
             _statusMessage = 'ลงทะเบียนเสร็จสิ้น - พร้อมรับบัตรใหม่';
           });
 
           _showSuccessSnackBar('ลงทะเบียนเสร็จสิ้น');
-          
+
           if (widget.onRegistrationComplete != null) {
             widget.onRegistrationComplete!();
           }
@@ -268,7 +363,10 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
   }
 
   /// Show upgrade confirmation dialog
-  Future<bool?> _showUpgradeConfirmDialog(IdCardData cardData, RegData existingReg) {
+  Future<bool?> _showUpgradeConfirmDialog(
+    IdCardData cardData,
+    RegData existingReg,
+  ) {
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -279,19 +377,19 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
           children: [
             const Text('พบข้อมูลเดิมที่ลงทะเบียนแบบ Manual'),
             const SizedBox(height: 16),
-            
+
             const Text('ข้อมูลเดิม:'),
             Text('ชื่อ-นามสกุล: ${existingReg.first} ${existingReg.last}'),
             Text('วันเกิด: ${existingReg.dob}'),
             Text('เพศ: ${existingReg.gender}'),
             const SizedBox(height: 12),
-            
+
             const Text('ข้อมูลจากบัตร:'),
             Text('ชื่อ-นามสกุล: ${cardData.firstName} ${cardData.lastName}'),
             Text('วันเกิด: ${cardData.dateOfBirth}'),
             Text('เพศ: ${cardData.gender}'),
             const SizedBox(height: 16),
-            
+
             const Text('ต้องการอัปเดตข้อมูลจากบัตรประชาชนหรือไม่?'),
             const Text(
               '(หลังจากนี้จะไม่สามารถแก้ไขข้อมูลส่วนตัวได้)',
@@ -338,10 +436,7 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
   void _showErrorSnackBar(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
     }
   }
@@ -350,10 +445,7 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
   void _showSuccessSnackBar(String message) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.green,
-        ),
+        SnackBar(content: Text(message), backgroundColor: Colors.green),
       );
     }
   }
@@ -374,6 +466,15 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
   }
 
   @override
+  void dispose() {
+    _eventSubscription.cancel();
+    _errorSubscription.cancel();
+    _statusSubscription.cancel();
+    _cardReaderService.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.all(16),
@@ -385,11 +486,7 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
             // Header
             Row(
               children: [
-                Icon(
-                  Icons.credit_card,
-                  size: 32,
-                  color: _getStatusColor(),
-                ),
+                Icon(Icons.credit_card, size: 32, color: _getStatusColor()),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -420,7 +517,7 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
                   ),
               ],
             ),
-            
+
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 16),
@@ -431,16 +528,11 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
               decoration: BoxDecoration(
                 color: _getStatusColor().withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: _getStatusColor().withOpacity(0.3),
-                ),
+                border: Border.all(color: _getStatusColor().withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  Icon(
-                    _getStatusIcon(),
-                    color: _getStatusColor(),
-                  ),
+                  Icon(_getStatusIcon(), color: _getStatusColor()),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -470,7 +562,10 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
                   children: [
                     const Text(
                       'บัตรล่าสุดที่ประมวลผล:',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     Text(
                       'ID: ${_lastProcessedCardId!.substring(0, 4)}****${_lastProcessedCardId!.substring(_lastProcessedCardId!.length - 4)}',
@@ -502,7 +597,7 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
                       foregroundColor: Colors.white,
                     ),
                   ),
-                
+
                 if (_currentStatus == CardReaderStatus.monitoring)
                   ElevatedButton.icon(
                     onPressed: _stopMonitoring,
@@ -519,6 +614,19 @@ class _AutoCardReaderWidgetState extends State<AutoCardReaderWidget> {
                   icon: const Icon(Icons.refresh),
                   label: const Text('ตรวจสอบด้วยตนเอง'),
                 ),
+
+                // ปุ่มรีเซ็ตการเชื่อมต่อ (แสดงเมื่อไม่ได้เชื่อมต่อหรือเกิดข้อผิดพลาด)
+                if (_currentStatus == CardReaderStatus.disconnected || 
+                    _currentStatus == CardReaderStatus.error)
+                  ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : _performAdvancedReconnection,
+                    icon: const Icon(Icons.settings_backup_restore),
+                    label: const Text('เชื่อมต่อใหม่'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
 
                 if (_lastProcessedCardId != null)
                   ElevatedButton.icon(

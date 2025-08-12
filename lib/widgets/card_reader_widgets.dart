@@ -591,3 +591,716 @@ class CardDataDisplayWidget extends StatelessWidget {
         '${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }
+
+/// Widget สำหรับตรวจสอบการเชื่อมต่อที่แข็งแกร่ง (Enhanced Connection Checker)
+class EnhancedConnectionChecker extends StatefulWidget {
+  final CardReaderService cardReaderService;
+  final Widget Function(bool isConnected, String statusMessage) builder;
+  final VoidCallback? onConnectionRestored;
+
+  const EnhancedConnectionChecker({
+    super.key,
+    required this.cardReaderService,
+    required this.builder,
+    this.onConnectionRestored,
+  });
+
+  @override
+  State<EnhancedConnectionChecker> createState() =>
+      _EnhancedConnectionCheckerState();
+}
+
+class _EnhancedConnectionCheckerState extends State<EnhancedConnectionChecker> {
+  bool _isConnected = false;
+  String _statusMessage = 'กำลังตรวจสอบการเชื่อมต่อ...';
+  bool _isChecking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkConnectionOnInit();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ตรวจสอบการเชื่อมต่อเมื่อ dependencies เปลี่ยน (เช่น เมื่อกลับมาหน้า)
+    _checkConnectionOnPageReturn();
+  }
+
+  /// ตรวจสอบการเชื่อมต่อเมื่อเริ่มต้น
+  Future<void> _checkConnectionOnInit() async {
+    await _performConnectionCheck();
+  }
+
+  /// ตรวจสอบการเชื่อมต่อเมื่อกลับมาหน้า
+  Future<void> _checkConnectionOnPageReturn() async {
+    // รอให้ widget ทำงานเสร็จก่อน
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    if (mounted) {
+      await _performConnectionCheck();
+    }
+  }
+
+  /// ดำเนินการตรวจสอบการเชื่อมต่อ
+  Future<void> _performConnectionCheck() async {
+    if (_isChecking) return;
+
+    setState(() {
+      _isChecking = true;
+      _statusMessage = 'กำลังตรวจสอบการเชื่อมต่อ...';
+    });
+
+    try {
+      // ตรวจสอบการเชื่อมต่อแบบแข็งแกร่ง
+      final isConnected = await widget.cardReaderService.ensureConnection();
+
+      if (mounted) {
+        setState(() {
+          _isConnected = isConnected;
+          _statusMessage = isConnected
+              ? 'เครื่องอ่านบัตรพร้อมใช้งาน'
+              : 'ไม่พบเครื่องอ่านบัตร - กรุณาเสียบ USB';
+        });
+
+        // แจ้งเตือนเมื่อการเชื่อมต่อฟื้นฟู
+        if (isConnected && !_isConnected) {
+          widget.onConnectionRestored?.call();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
+          _statusMessage = 'เกิดข้อผิดพลาดในการตรวจสอบ: $e';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isChecking = false;
+        });
+      }
+    }
+  }
+
+  /// ตรวจสอบการเชื่อมต่อด้วยตนเอง
+  Future<void> _manualCheckConnection() async {
+    await _performConnectionCheck();
+  }
+
+  /// ตรวจสอบ Permission
+  Future<void> _checkPermission() async {
+    if (_isChecking) return;
+
+    setState(() {
+      _isChecking = true;
+      _statusMessage = 'กำลังตรวจสอบสิทธิ์การเข้าถึง...';
+    });
+
+    try {
+      final hasPermission = await widget.cardReaderService.ensurePermission();
+
+      if (mounted) {
+        setState(() {
+          _isConnected = hasPermission;
+          _statusMessage = hasPermission
+              ? 'ได้รับสิทธิ์การเข้าถึงแล้ว'
+              : 'ไม่ได้รับสิทธิ์การเข้าถึง';
+        });
+
+        if (hasPermission) {
+          widget.onConnectionRestored?.call();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
+          _statusMessage = 'เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์: $e';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isChecking = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // แสดงสถานะการเชื่อมต่อ
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(
+                  _isConnected ? Icons.usb : Icons.usb_off,
+                  color: _isConnected ? Colors.green : Colors.red,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isConnected ? 'เชื่อมต่อแล้ว' : 'ไม่ได้เชื่อมต่อ',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: _isConnected ? Colors.green : Colors.red,
+                        ),
+                      ),
+                      Text(
+                        _statusMessage,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_isChecking)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: _manualCheckConnection,
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'ตรวจสอบการเชื่อมต่อใหม่',
+                      ),
+                      IconButton(
+                        onPressed: _checkPermission,
+                        icon: const Icon(Icons.security),
+                        tooltip: 'ตรวจสอบสิทธิ์การเข้าถึง',
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // แสดงเนื้อหาหลัก
+        widget.builder(_isConnected, _statusMessage),
+      ],
+    );
+  }
+}
+
+/// ปุ่มรีเซ็ตการเชื่อมต่อแบบขั้นสูง
+class AdvancedResetButton extends StatefulWidget {
+  final CardReaderService cardReaderService;
+  final VoidCallback? onResetComplete;
+  final VoidCallback? onResetFailed;
+
+  const AdvancedResetButton({
+    super.key,
+    required this.cardReaderService,
+    this.onResetComplete,
+    this.onResetFailed,
+  });
+
+  @override
+  State<AdvancedResetButton> createState() => _AdvancedResetButtonState();
+}
+
+class _AdvancedResetButtonState extends State<AdvancedResetButton> {
+  bool _isResetting = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // ปุ่มรีเซ็ต
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _isResetting ? null : _performAdvancedReset,
+            icon: _isResetting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.restart_alt),
+            label: Text(
+              _isResetting ? 'กำลังรีเซ็ต...' : 'รีเซ็ตการเชื่อมต่อแบบขั้นสูง',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 2,
+            ),
+          ),
+        ),
+
+        // ข้อความคำแนะนำ
+        if (!_isResetting) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.purple.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.purple.shade200),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.purple.shade600,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'รีเซ็ตแบบขั้นสูง',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '• รีเซ็ตการเชื่อมต่อทั้งหมด\n'
+                  '• ตรวจสอบ USB device ใหม่\n'
+                  '• แก้ไขปัญหาการเชื่อมต่อที่ซับซ้อน\n'
+                  '• ใช้เวลาประมาณ 5-10 วินาที',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _performAdvancedReset() async {
+    if (_isResetting) return;
+
+    setState(() {
+      _isResetting = true;
+    });
+
+    try {
+      // แสดง dialog ยืนยัน
+      final confirmed = await _showResetConfirmDialog();
+
+      if (confirmed == true) {
+        // ดำเนินการรีเซ็ต
+        await widget.cardReaderService.resetConnection();
+
+        // รอสักครู่
+        await Future.delayed(const Duration(seconds: 2));
+
+        // ตรวจสอบผลลัพธ์
+        final isConnected = await widget.cardReaderService.checkConnection();
+
+        if (mounted) {
+          if (isConnected) {
+            widget.onResetComplete?.call();
+            _showSuccessSnackBar('รีเซ็ตการเชื่อมต่อสำเร็จ');
+          } else {
+            widget.onResetFailed?.call();
+            _showResetFailedDialog();
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        widget.onResetFailed?.call();
+        _showErrorSnackBar('รีเซ็ตการเชื่อมต่อล้มเหลว: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isResetting = false;
+        });
+      }
+    }
+  }
+
+  Future<bool?> _showResetConfirmDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.restart_alt, color: Colors.purple, size: 20),
+            const SizedBox(width: 8),
+            const Text('ยืนยันการรีเซ็ต'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('คุณต้องการรีเซ็ตการเชื่อมต่อแบบขั้นสูงหรือไม่?'),
+            SizedBox(height: 12),
+            Text(
+              'การดำเนินการนี้จะ:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            Text('• หยุดการเชื่อมต่อทั้งหมด'),
+            Text('• ตรวจสอบ USB device ใหม่'),
+            Text('• เริ่มต้นระบบใหม่'),
+            SizedBox(height: 8),
+            Text(
+              'ใช้เวลาประมาณ 5-10 วินาที',
+              style: TextStyle(fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('ยกเลิก'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('รีเซ็ต'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showResetFailedDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 20),
+            const SizedBox(width: 8),
+            const Text('รีเซ็ตไม่สำเร็จ'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('ไม่สามารถรีเซ็ตการเชื่อมต่อได้'),
+            const SizedBox(height: 16),
+            const Text(
+              'กรุณาลอง:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text('• ถอดและเสียบ USB ใหม่'),
+            const Text('• ตรวจสอบสาย USB'),
+            const Text('• ลองใช้ USB port อื่น'),
+            const Text('• รีสตาร์ทแอปพลิเคชัน'),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: const Text(
+                'หากยังไม่สามารถแก้ไขได้ กรุณาติดต่อผู้ดูแลระบบ',
+                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('ตกลง'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(message),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.error, color: Colors.white),
+            const SizedBox(width: 8),
+            Text(message),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+}
+
+/// Widget สำหรับจัดการ Permission
+class PermissionManagerWidget extends StatefulWidget {
+  final CardReaderService cardReaderService;
+  final VoidCallback? onPermissionGranted;
+  final VoidCallback? onPermissionDenied;
+
+  const PermissionManagerWidget({
+    super.key,
+    required this.cardReaderService,
+    this.onPermissionGranted,
+    this.onPermissionDenied,
+  });
+
+  @override
+  State<PermissionManagerWidget> createState() =>
+      _PermissionManagerWidgetState();
+}
+
+class _PermissionManagerWidgetState extends State<PermissionManagerWidget> {
+  bool _isRequestingPermission = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: widget.cardReaderService,
+      builder: (context, child) {
+        final device = widget.cardReaderService.currentDevice;
+        final hasPermission = device?.hasPermission ?? false;
+        final isAttached = device?.isAttached ?? false;
+
+        if (!isAttached) {
+          return const SizedBox.shrink();
+        }
+
+        if (hasPermission) {
+          return const SizedBox.shrink();
+        }
+
+        return Card(
+          color: Colors.orange.shade50,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.security,
+                      color: Colors.orange.shade600,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'ต้องการสิทธิ์ในการเข้าถึง',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'ระบบต้องการสิทธิ์ในการเข้าถึงเครื่องอ่านบัตรประชาชน',
+                  style: TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isRequestingPermission
+                        ? null
+                        : _requestPermission,
+                    icon: _isRequestingPermission
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : const Icon(Icons.security),
+                    label: Text(
+                      _isRequestingPermission
+                          ? 'กำลังขอสิทธิ์...'
+                          : 'ขอสิทธิ์การเข้าถึง',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            color: Colors.blue.shade600,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'คำแนะนำ',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '• ระบบจะแสดง dialog ขอสิทธิ์การเข้าถึง USB device',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      const Text(
+                        '• กรุณากด "อนุญาต" หรือ "Allow" เพื่อให้ระบบทำงานได้',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      const Text(
+                        '• หากไม่ได้รับสิทธิ์ ให้ลองเสียบ USB ใหม่',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _requestPermission() async {
+    if (_isRequestingPermission) return;
+
+    setState(() {
+      _isRequestingPermission = true;
+    });
+
+    try {
+      final success = await widget.cardReaderService.requestPermission();
+
+      if (success) {
+        widget.onPermissionGranted?.call();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('ได้รับสิทธิ์การเข้าถึงแล้ว'),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        widget.onPermissionDenied?.call();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.error, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('ไม่ได้รับสิทธิ์การเข้าถึง'),
+                ],
+              ),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      widget.onPermissionDenied?.call();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 8),
+                Text('เกิดข้อผิดพลาด: $e'),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRequestingPermission = false;
+        });
+      }
+    }
+  }
+}

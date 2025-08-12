@@ -5,20 +5,20 @@ import 'package:thai_idcard_reader_flutter/thai_idcard_reader_flutter.dart';
 
 /// สถานะการเชื่อมต่อเครื่องอ่านบัตร
 enum CardReaderConnectionStatus {
-  disconnected,   // ไม่ได้เชื่อมต่อ
-  connecting,     // กำลังเชื่อมต่อ
-  connected,      // เชื่อมต่อแล้ว
-  error,          // เกิดข้อผิดพลาด
+  disconnected, // ไม่ได้เชื่อมต่อ
+  connecting, // กำลังเชื่อมต่อ
+  connected, // เชื่อมต่อแล้ว
+  error, // เกิดข้อผิดพลาด
 }
 
 /// สถานะการอ่านบัตร
 enum CardReadingStatus {
-  idle,           // ไม่ได้อ่าน
-  reading,        // กำลังอ่าน
-  success,        // อ่านสำเร็จ
-  failed,         // อ่านไม่สำเร็จ
-  noCard,         // ไม่พบบัตร
-  cardDamaged,    // บัตรเสียหาย
+  idle, // ไม่ได้อ่าน
+  reading, // กำลังอ่าน
+  success, // อ่านสำเร็จ
+  failed, // อ่านไม่สำเร็จ
+  noCard, // ไม่พบบัตร
+  cardDamaged, // บัตรเสียหาย
 }
 
 /// ข้อมูลจากบัตรประชาชนไทย
@@ -77,23 +77,29 @@ class ThaiIdCardData {
 
   /// ตรวจสอบความถูกต้องของข้อมูลพื้นฐาน
   bool get isValid {
-    return cid.isNotEmpty && 
-           cid.length == 13 && 
-           firstnameTH?.isNotEmpty == true &&
-           lastnameTH?.isNotEmpty == true;
+    return cid.isNotEmpty &&
+        cid.length == 13 &&
+        firstnameTH?.isNotEmpty == true &&
+        lastnameTH?.isNotEmpty == true;
   }
 
   /// ชื่อเต็มภาษาไทย
   String get fullNameTH {
-    final parts = [titleTH, firstnameTH, lastnameTH]
-        .where((part) => part?.isNotEmpty == true);
+    final parts = [
+      titleTH,
+      firstnameTH,
+      lastnameTH,
+    ].where((part) => part?.isNotEmpty == true);
     return parts.join(' ');
   }
 
   /// ชื่อเต็มภาษาอังกฤษ
   String get fullNameEN {
-    final parts = [titleEN, firstnameEN, lastnameEN]
-        .where((part) => part?.isNotEmpty == true);
+    final parts = [
+      titleEN,
+      firstnameEN,
+      lastnameEN,
+    ].where((part) => part?.isNotEmpty == true);
     return parts.join(' ');
   }
 
@@ -129,12 +135,13 @@ class CardReaderService extends ChangeNotifier {
   CardReaderService._internal();
 
   // สถานะ
-  CardReaderConnectionStatus _connectionStatus = CardReaderConnectionStatus.disconnected;
+  CardReaderConnectionStatus _connectionStatus =
+      CardReaderConnectionStatus.disconnected;
   CardReadingStatus _readingStatus = CardReadingStatus.idle;
   UsbDevice? _currentDevice;
   String? _lastError;
   ThaiIdCardData? _lastReadData;
-  
+
   // การตั้งค่า
   Duration _readTimeout = const Duration(seconds: 10);
   final int _maxRetryAttempts = 3;
@@ -152,7 +159,8 @@ class CardReaderService extends ChangeNotifier {
   UsbDevice? get currentDevice => _currentDevice;
   String? get lastError => _lastError;
   ThaiIdCardData? get lastReadData => _lastReadData;
-  bool get isConnected => _connectionStatus == CardReaderConnectionStatus.connected;
+  bool get isConnected =>
+      _connectionStatus == CardReaderConnectionStatus.connected;
   bool get isReading => _readingStatus == CardReadingStatus.reading;
 
   /// เริ่มต้นการเชื่อมต่อกับเครื่องอ่านบัตร
@@ -160,13 +168,16 @@ class CardReaderService extends ChangeNotifier {
     try {
       debugPrint('🔧 CardReaderService: เริ่มต้นการเชื่อมต่อ...');
       _setConnectionStatus(CardReaderConnectionStatus.connecting);
-      
+
       // ตั้งค่า timeout ตาม platform
       _configureTimeouts();
-      
+
       // เริ่มฟัง USB device events
       _startListeningToDeviceEvents();
-      
+
+      // ตรวจสอบ device ที่เชื่อมต่ออยู่แล้ว
+      await _checkExistingDevices();
+
       debugPrint('✅ CardReaderService: เริ่มต้นสำเร็จ');
     } catch (e) {
       debugPrint('❌ CardReaderService: เริ่มต้นล้มเหลว - $e');
@@ -183,30 +194,60 @@ class CardReaderService extends ChangeNotifier {
       _readTimeout = const Duration(seconds: 10); // Desktop เร็วกว่า
       _retryDelay = const Duration(seconds: 1);
     }
-    debugPrint('⏱️ CardReaderService: ตั้งค่า timeout = ${_readTimeout.inSeconds}s');
+    debugPrint(
+      '⏱️ CardReaderService: ตั้งค่า timeout = ${_readTimeout.inSeconds}s',
+    );
+  }
+
+  /// ตรวจสอบ device ที่เชื่อมต่ออยู่แล้ว
+  Future<void> _checkExistingDevices() async {
+    try {
+      debugPrint(
+        '🔍 CardReaderService: ตรวจสอบ device ที่เชื่อมต่ออยู่แล้ว...',
+      );
+
+      // ลองอ่านบัตรเพื่อให้ระบบตรวจสอบ device ที่มีอยู่
+      try {
+        await ThaiIdcardReaderFlutter.read();
+        debugPrint('✅ CardReaderService: พบ device ที่เชื่อมต่ออยู่แล้ว');
+      } catch (e) {
+        debugPrint(
+          '⚠️ CardReaderService: ไม่พบ device หรือไม่มี card (ปกติ) - $e',
+        );
+        // นี่เป็นเรื่องปกติหากไม่มี device หรือ card
+      }
+    } catch (e) {
+      debugPrint('❌ CardReaderService: ตรวจสอบ device ที่มีอยู่ล้มเหลว - $e');
+    }
   }
 
   /// เริ่มฟัง USB device events
   void _startListeningToDeviceEvents() {
     _deviceStreamSubscription?.cancel();
-    _deviceStreamSubscription = ThaiIdcardReaderFlutter.deviceHandlerStream.listen(
-      _onDeviceEvent,
-      onError: _onDeviceError,
-    );
+    _deviceStreamSubscription = ThaiIdcardReaderFlutter.deviceHandlerStream
+        .listen(_onDeviceEvent, onError: _onDeviceError);
+
+    debugPrint('🔍 CardReaderService: เริ่มฟัง USB device events');
   }
 
   /// จัดการ device events
   void _onDeviceEvent(UsbDevice device) {
-    debugPrint('📱 CardReaderService: Device event - ${device.productName}');
-    
+    debugPrint(
+      '📱 CardReaderService: Device event - ${device.productName} (hasPermission: ${device.hasPermission}, isAttached: ${device.isAttached})',
+    );
+
     _currentDevice = device;
-    
+
     if (device.hasPermission && device.isAttached) {
+      debugPrint('✅ CardReaderService: Device เชื่อมต่อและมี Permission');
       _setConnectionStatus(CardReaderConnectionStatus.connected);
       _startListeningToCardEvents();
     } else if (device.isAttached && !device.hasPermission) {
+      debugPrint('⚠️ CardReaderService: Device เชื่อมต่อแต่ไม่มี Permission');
+      _setConnectionStatus(CardReaderConnectionStatus.error);
       _setError('ไม่ได้รับอนุญาตใช้งานเครื่องอ่านบัตร', 'NO_PERMISSION');
     } else {
+      debugPrint('❌ CardReaderService: Device ไม่ได้เชื่อมต่อ');
       _setConnectionStatus(CardReaderConnectionStatus.disconnected);
       _stopListeningToCardEvents();
     }
@@ -215,7 +256,11 @@ class CardReaderService extends ChangeNotifier {
   /// จัดการ device errors
   void _onDeviceError(dynamic error) {
     debugPrint('❌ CardReaderService: Device error - $error');
-    _setError('เกิดข้อผิดพลาดในการเชื่อมต่อเครื่องอ่านบัตร', 'DEVICE_ERROR', error);
+    _setError(
+      'เกิดข้อผิดพลาดในการเชื่อมต่อเครื่องอ่านบัตร',
+      'DEVICE_ERROR',
+      error,
+    );
   }
 
   /// เริ่มฟัง card events
@@ -235,7 +280,7 @@ class CardReaderService extends ChangeNotifier {
   /// จัดการ card events
   void _onCardEvent(dynamic cardEvent) {
     debugPrint('💳 CardReaderService: Card event - ${cardEvent.isReady}');
-    
+
     if (cardEvent.isReady && !isReading) {
       // บัตรพร้อม - อ่านข้อมูลอัตโนมัติ
       _performCardRead();
@@ -258,16 +303,13 @@ class CardReaderService extends ChangeNotifier {
   }) async {
     if (!isConnected) {
       throw const CardReaderException(
-        'เครื่องอ่านบัตรไม่ได้เชื่อมต่อ', 
-        'NOT_CONNECTED'
+        'เครื่องอ่านบัตรไม่ได้เชื่อมต่อ',
+        'NOT_CONNECTED',
       );
     }
 
     if (isReading) {
-      throw const CardReaderException(
-        'กำลังอ่านข้อมูลอยู่', 
-        'ALREADY_READING'
-      );
+      throw const CardReaderException('กำลังอ่านข้อมูลอยู่', 'ALREADY_READING');
     }
 
     final attempts = retryAttempts ?? _maxRetryAttempts;
@@ -275,32 +317,35 @@ class CardReaderService extends ChangeNotifier {
 
     for (int attempt = 1; attempt <= attempts; attempt++) {
       try {
-        debugPrint('📖 CardReaderService: พยายามอ่านครั้งที่ $attempt/$attempts');
-        
+        debugPrint(
+          '📖 CardReaderService: พยายามอ่านครั้งที่ $attempt/$attempts',
+        );
+
         final result = await _performCardRead(timeout: readTimeout);
         if (result != null) {
           return result;
         }
-        
+
         // หากไม่สำเร็จและยังมีการพยายามอีก ให้รอสักครู่
         if (attempt < attempts) {
           await Future.delayed(_retryDelay);
         }
-        
       } catch (e) {
-        debugPrint('❌ CardReaderService: การพยายามครั้งที่ $attempt ล้มเหลว - $e');
-        
+        debugPrint(
+          '❌ CardReaderService: การพยายามครั้งที่ $attempt ล้มเหลว - $e',
+        );
+
         if (attempt == attempts) {
           rethrow; // พ้อความพยายามสุดท้ายแล้ว ให้โยน error
         }
-        
+
         await Future.delayed(_retryDelay);
       }
     }
 
     throw const CardReaderException(
       'ไม่สามารถอ่านข้อมูลจากบัตรได้หลังจากพยายามหลายครั้ง',
-      'READ_FAILED'
+      'READ_FAILED',
     );
   }
 
@@ -310,15 +355,12 @@ class CardReaderService extends ChangeNotifier {
     _clearError();
 
     final readTimeout = timeout ?? _readTimeout;
-    
+
     try {
       // ตั้งค่า timeout timer
       _readTimeoutTimer?.cancel();
       _readTimeoutTimer = Timer(readTimeout, () {
-        throw const CardReaderException(
-          'หมดเวลาการอ่านบัตร',
-          'READ_TIMEOUT'
-        );
+        throw const CardReaderException('หมดเวลาการอ่านบัตร', 'READ_TIMEOUT');
       });
 
       // อ่านข้อมูล
@@ -332,26 +374,27 @@ class CardReaderService extends ChangeNotifier {
 
       // แปลงเป็น ThaiIdCardData
       final cardData = ThaiIdCardData.fromThaiIDCard(result);
-      
+
       if (!cardData.isValid) {
         _setReadingStatus(CardReadingStatus.cardDamaged);
         throw const CardReaderException(
           'ข้อมูลในบัตรไม่ถูกต้องหรือไม่สมบูรณ์',
-          'INVALID_CARD_DATA'
+          'INVALID_CARD_DATA',
         );
       }
 
       // บันทึกข้อมูลล่าสุด
       _lastReadData = cardData;
       _setReadingStatus(CardReadingStatus.success);
-      
-      debugPrint('✅ CardReaderService: อ่านบัตรสำเร็จ - ${cardData.fullNameTH}');
+
+      debugPrint(
+        '✅ CardReaderService: อ่านบัตรสำเร็จ - ${cardData.fullNameTH}',
+      );
       return cardData;
-      
     } catch (e) {
       _readTimeoutTimer?.cancel();
       _setReadingStatus(CardReadingStatus.failed);
-      
+
       if (e is CardReaderException) {
         rethrow;
       } else {
@@ -368,33 +411,36 @@ class CardReaderService extends ChangeNotifier {
   Future<void> resetConnection() async {
     try {
       debugPrint('🔄 CardReaderService: เริ่มการรีเซ็ตแบบขั้นสูง...');
-      
+
       _setConnectionStatus(CardReaderConnectionStatus.connecting);
-      
+
       // 1. หยุดการฟังทั้งหมด
       await _stopAllListeners();
-      
+
       // 2. ล้างข้อมูลที่ cache ไว้ทั้งหมด
       _currentDevice = null;
       _lastReadData = null;
       _lastError = null;
-      
+
       // 3. รอให้ USB subsystem ทำงานให้เสร็จ
       debugPrint('⏳ CardReaderService: รอ USB subsystem reset...');
       await Future.delayed(const Duration(seconds: 3));
-      
+
       // 4. เริ่มต้นใหม่
       debugPrint('🔄 CardReaderService: เริ่มต้นระบบใหม่...');
       await initialize();
-      
+
       // 5. รอสักครู่แล้วตรวจสอบสถานะ
       await Future.delayed(const Duration(seconds: 1));
-      
+
       debugPrint('✅ CardReaderService: รีเซ็ตแบบขั้นสูงสำเร็จ');
-      
     } catch (e) {
       debugPrint('❌ CardReaderService: รีเซ็ตล้มเหลว - $e');
-      _setError('ไม่สามารถรีเซ็ตการเชื่อมต่อได้ - อาจต้องถอด USB แล้วเสียบใหม่', 'ENHANCED_RESET_ERROR', e);
+      _setError(
+        'ไม่สามารถรีเซ็ตการเชื่อมต่อได้ - อาจต้องถอด USB แล้วเสียบใหม่',
+        'ENHANCED_RESET_ERROR',
+        e,
+      );
     }
   }
 
@@ -402,20 +448,19 @@ class CardReaderService extends ChangeNotifier {
   Future<void> quickResetConnection() async {
     try {
       debugPrint('🔄 CardReaderService: รีเซ็ตแบบเร็ว...');
-      
+
       _setConnectionStatus(CardReaderConnectionStatus.connecting);
-      
+
       // หยุดการฟังทั้งหมด
       await _stopAllListeners();
-      
+
       // รอสักครู่
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       // เริ่มต้นใหม่
       await initialize();
-      
+
       debugPrint('✅ CardReaderService: รีเซ็ตเร็วสำเร็จ');
-      
     } catch (e) {
       debugPrint('❌ CardReaderService: รีเซ็ตเร็วล้มเหลว - $e');
       _setError('ไม่สามารถรีเซ็ตการเชื่อมต่อได้', 'QUICK_RESET_ERROR', e);
@@ -425,23 +470,166 @@ class CardReaderService extends ChangeNotifier {
   /// ตรวจสอบสถานะการเชื่อมต่อ
   Future<bool> checkConnection() async {
     try {
+      debugPrint('🔍 CardReaderService: ตรวจสอบการเชื่อมต่อ...');
+
       // ตรวจสอบ device
       if (_currentDevice == null || !_currentDevice!.isAttached) {
+        debugPrint(
+          '❌ CardReaderService: ไม่พบ device หรือ device ไม่ได้เชื่อมต่อ',
+        );
         _setConnectionStatus(CardReaderConnectionStatus.disconnected);
         return false;
       }
-      
+
       if (!_currentDevice!.hasPermission) {
+        debugPrint('❌ CardReaderService: ไม่ได้รับอนุญาตใช้งาน device');
         _setConnectionStatus(CardReaderConnectionStatus.error);
         return false;
       }
-      
+
+      debugPrint('✅ CardReaderService: Device เชื่อมต่อและได้รับอนุญาต');
       _setConnectionStatus(CardReaderConnectionStatus.connected);
       return true;
-      
     } catch (e) {
       debugPrint('❌ CardReaderService: เช็คการเชื่อมต่อล้มเหลว - $e');
       _setConnectionStatus(CardReaderConnectionStatus.error);
+      return false;
+    }
+  }
+
+  /// ตรวจสอบและขอ Permission ใหม่
+  Future<bool> requestPermission() async {
+    try {
+      debugPrint('🔐 CardReaderService: ขอ Permission ใหม่...');
+
+      if (_currentDevice == null) {
+        debugPrint('❌ CardReaderService: ไม่พบ device สำหรับขอ permission');
+        return false;
+      }
+
+      // ลองอ่านบัตรเพื่อให้ระบบขอ permission อัตโนมัติ
+      try {
+        await ThaiIdcardReaderFlutter.read();
+        debugPrint('✅ CardReaderService: ได้รับ Permission สำเร็จ');
+        _setConnectionStatus(CardReaderConnectionStatus.connected);
+        return true;
+      } catch (e) {
+        debugPrint('❌ CardReaderService: ไม่ได้รับ Permission - $e');
+        _setConnectionStatus(CardReaderConnectionStatus.error);
+        return false;
+      }
+    } catch (e) {
+      debugPrint('❌ CardReaderService: ขอ Permission ล้มเหลว - $e');
+      _setConnectionStatus(CardReaderConnectionStatus.error);
+      return false;
+    }
+  }
+
+  /// ตรวจสอบและฟื้นฟู Permission
+  Future<bool> ensurePermission() async {
+    try {
+      debugPrint('🔐 CardReaderService: ตรวจสอบและฟื้นฟู Permission...');
+
+      // ตรวจสอบ device
+      if (_currentDevice == null || !_currentDevice!.isAttached) {
+        debugPrint('❌ CardReaderService: ไม่พบ device ที่เชื่อมต่อ');
+        return false;
+      }
+
+      // ตรวจสอบ permission ปัจจุบัน
+      if (_currentDevice!.hasPermission) {
+        debugPrint('✅ CardReaderService: มี Permission อยู่แล้ว');
+        _setConnectionStatus(CardReaderConnectionStatus.connected);
+        return true;
+      }
+
+      // ถ้าไม่มี permission ให้ขอใหม่
+      debugPrint('🔄 CardReaderService: ขอ Permission ใหม่...');
+      return await requestPermission();
+    } catch (e) {
+      debugPrint('❌ CardReaderService: ตรวจสอบ Permission ล้มเหลว - $e');
+      return false;
+    }
+  }
+
+  /// ตรวจสอบการเชื่อมต่อแบบแข็งแกร่ง (Enhanced connection check)
+  Future<bool> checkConnectionEnhanced() async {
+    try {
+      debugPrint('🔍 CardReaderService: ตรวจสอบการเชื่อมต่อแบบแข็งแกร่ง...');
+
+      // 1. ตรวจสอบ device ปัจจุบัน
+      if (_currentDevice != null &&
+          _currentDevice!.isAttached &&
+          _currentDevice!.hasPermission) {
+        debugPrint('✅ CardReaderService: Device ปัจจุบันยังใช้งานได้');
+        _setConnectionStatus(CardReaderConnectionStatus.connected);
+        return true;
+      }
+
+      // 2. ถ้า device ไม่พร้อม ให้ลองค้นหาใหม่
+      debugPrint('🔄 CardReaderService: ลองค้นหา device ใหม่...');
+      _setConnectionStatus(CardReaderConnectionStatus.connecting);
+
+      // 3. หยุดการฟังทั้งหมดก่อน
+      await _stopAllListeners();
+
+      // 4. รอสักครู่ให้ USB subsystem ทำงาน
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // 5. เริ่มต้นใหม่
+      await initialize();
+
+      // 6. รอให้ระบบทำงานเสร็จ
+      await Future.delayed(const Duration(seconds: 2));
+
+      // 7. ตรวจสอบและขอ Permission หากจำเป็น
+      final hasPermission = await ensurePermission();
+
+      if (hasPermission) {
+        debugPrint(
+          '✅ CardReaderService: ตรวจสอบการเชื่อมต่อแบบแข็งแกร่งสำเร็จ',
+        );
+        return true;
+      } else {
+        debugPrint(
+          '❌ CardReaderService: ตรวจสอบการเชื่อมต่อแบบแข็งแกร่งล้มเหลว',
+        );
+        return false;
+      }
+    } catch (e) {
+      debugPrint(
+        '❌ CardReaderService: ตรวจสอบการเชื่อมต่อแบบแข็งแกร่งเกิดข้อผิดพลาด - $e',
+      );
+      _setConnectionStatus(CardReaderConnectionStatus.error);
+      return false;
+    }
+  }
+
+  /// ตรวจสอบและฟื้นฟูการเชื่อมต่อ (สำหรับกรณีที่กลับมาหน้า card reader)
+  Future<bool> ensureConnection() async {
+    try {
+      debugPrint('🔧 CardReaderService: ตรวจสอบและฟื้นฟูการเชื่อมต่อ...');
+
+      // 1. ตรวจสอบการเชื่อมต่อปัจจุบัน
+      if (await checkConnection()) {
+        debugPrint('✅ CardReaderService: การเชื่อมต่อปัจจุบันใช้งานได้');
+        return true;
+      }
+
+      // 2. ถ้าไม่สำเร็จ ให้ลองตรวจสอบ Permission
+      debugPrint('🔐 CardReaderService: ลองตรวจสอบ Permission...');
+      final hasPermission = await ensurePermission();
+
+      if (hasPermission) {
+        debugPrint('✅ CardReaderService: ฟื้นฟู Permission สำเร็จ');
+        return true;
+      }
+
+      // 3. ถ้า Permission ไม่สำเร็จ ให้ลองตรวจสอบแบบแข็งแกร่ง
+      debugPrint('🔄 CardReaderService: ลองฟื้นฟูการเชื่อมต่อแบบแข็งแกร่ง...');
+      return await checkConnectionEnhanced();
+    } catch (e) {
+      debugPrint('❌ CardReaderService: ฟื้นฟูการเชื่อมต่อล้มเหลว - $e');
       return false;
     }
   }
@@ -477,7 +665,7 @@ class CardReaderService extends ChangeNotifier {
     _lastError = message;
     _setConnectionStatus(CardReaderConnectionStatus.error);
     notifyListeners();
-    
+
     debugPrint('❌ CardReaderService: Error($code) = $message');
     if (originalError != null) {
       debugPrint('   Original: $originalError');
@@ -515,7 +703,7 @@ class CardReaderService extends ChangeNotifier {
   /// ตรวจสอบว่าต้องใช้การรีเซ็ต USB จริงหรือไม่
   bool shouldUsePhysicalReset() {
     return _lastError?.contains('ENHANCED_RESET_ERROR') == true ||
-           _connectionStatus == CardReaderConnectionStatus.error;
+        _connectionStatus == CardReaderConnectionStatus.error;
   }
 
   /// ข้อความแนะนำสำหรับผู้ใช้เมื่อต้องรีเซ็ต USB จริง

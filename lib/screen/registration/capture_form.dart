@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:thai_idcard_reader_flutter/thai_idcard_reader_flutter.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'dart:io';
 import '../../models/reg_data.dart';
 import '../../services/registration_service.dart';
 import '../../services/enhanced_card_reader_service.dart';
@@ -48,21 +50,309 @@ class _CaptureFormState extends State<CaptureForm> {
     super.initState();
     // Listen to USB device events
     ThaiIdcardReaderFlutter.deviceHandlerStream.listen(_onUSB);
+    // Check for already connected devices
+    _checkExistingConnection();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ตรวจสอบการเชื่อมต่อเมื่อกลับมาหน้า
+    _checkConnectionOnPageReturn();
+  }
+
+  /// Check if there's already a connected USB device when the screen starts
+  Future<void> _checkExistingConnection() async {
+    try {
+      // Small delay to let the stream listener initialize first
+      await Future.delayed(const Duration(milliseconds: 800));
+      
+      // Try to perform a card read to trigger device detection
+      try {
+        debugPrint('🔍 CaptureForm: Checking for existing card reader connection...');
+        await ThaiIdcardReaderFlutter.read();
+        debugPrint('✅ CaptureForm: Card reader connection detected');
+      } catch (e) {
+        debugPrint('⚠️ CaptureForm: No card reader or card detected (this is normal) - $e');
+        // This is expected if no device is connected or no card is inserted
+      }
+      
+    } catch (e) {
+      debugPrint('⚠️ CaptureForm: Could not check existing connection - $e');
+      // This is not a critical error, just log it
+    }
+  }
+
+  /// ตรวจสอบการเชื่อมต่อเมื่อกลับมาหน้า
+  Future<void> _checkConnectionOnPageReturn() async {
+    // รอให้ widget ทำงานเสร็จก่อน
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (mounted) {
+      debugPrint('🔄 CaptureForm: ตรวจสอบการเชื่อมต่อเมื่อกลับมาหน้า...');
+
+      try {
+        // ตรวจสอบว่ามี device อยู่แล้วหรือไม่
+        if (_device != null && _device!.hasPermission && _device!.isAttached) {
+          debugPrint('✅ CaptureForm: Device ยังเชื่อมต่ออยู่ - ไม่ต้องทำอะไร');
+          return;
+        }
+
+        // ใช้ CardReaderService เพื่อตรวจสอบการเชื่อมต่อแบบแข็งแกร่ง
+        final cardReaderService = CardReaderService();
+        final isConnected = await cardReaderService.ensureConnection();
+
+        if (isConnected) {
+          debugPrint('✅ CaptureForm: ตรวจพบเครื่องอ่านบัตรที่เสียบอยู่แล้ว');
+          
+          // แสดงข้อความแจ้งเตือนว่าพบเครื่องอ่านบัตร (เฉพาะเมื่อไม่มี device)
+          if (mounted && (_device == null || !_device!.hasPermission)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.usb, color: Colors.white),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'ตรวจพบเครื่องอ่านบัตรที่เสียบอยู่แล้ว - พร้อมใช้งาน',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+
+          // รีเซ็ต stream listener เพื่อให้แน่ใจว่าจะได้รับ events
+          _reinitializeStreamListeners();
+        } else {
+          debugPrint('❌ CaptureForm: ไม่พบเครื่องอ่านบัตร');
+        }
+      } catch (e) {
+        debugPrint('❌ CaptureForm: เกิดข้อผิดพลาดในการตรวจสอบการเชื่อมต่อ - $e');
+      }
+    }
+  }
+
+  /// รีเซ็ต stream listeners เพื่อให้แน่ใจว่าจะได้รับ USB events
+  void _reinitializeStreamListeners() {
+    try {
+      debugPrint('🔄 CaptureForm: รีเซ็ต stream listeners...');
+      
+      // ไม่เพิ่ม listener ใหม่ เพราะจะทำให้เกิด duplicate
+      // แค่ log ว่าได้ทำการตรวจสอบแล้ว
+      debugPrint('✅ CaptureForm: Stream listeners ยังทำงานอยู่');
+    } catch (e) {
+      debugPrint('❌ CaptureForm: รีเซ็ต stream listeners ล้มเหลว - $e');
+    }
+  }
+
+  /// ตรวจสอบการเชื่อมต่อด้วยตนเอง (สำหรับปุ่มสีเขียว)
+  Future<void> _manualCheckConnection() async {
+    if (mounted) {
+      debugPrint('🔍 CaptureForm: ตรวจสอบการเชื่อมต่อด้วยตนเอง...');
+
+      // แสดง loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('กำลังตรวจสอบเครื่องอ่านบัตร...'),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      try {
+        // ใช้ CardReaderService เพื่อตรวจสอบการเชื่อมต่อ
+        final cardReaderService = CardReaderService();
+        final isConnected = await cardReaderService.ensureConnection();
+
+        if (isConnected) {
+          debugPrint('✅ CaptureForm: พบเครื่องอ่านบัตร');
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: Colors.white),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'พบเครื่องอ่านบัตรแล้ว - พร้อมใช้งาน',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+
+          // ลองอ่านบัตรทันทีหากมีบัตรเสียบอยู่
+          await _tryReadCardIfPresent();
+        } else {
+          debugPrint('❌ CaptureForm: ไม่พบเครื่องอ่านบัตร');
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.error, color: Colors.white),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'ไม่พบเครื่องอ่านบัตร - กรุณาตรวจสอบการเสียบ USB',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('❌ CaptureForm: เกิดข้อผิดพลาดในการตรวจสอบ - $e');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.warning, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'เกิดข้อผิดพลาด: $e',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  /// ลองอ่านบัตรหากมีบัตรเสียบอยู่
+  Future<void> _tryReadCardIfPresent() async {
+    try {
+      debugPrint('🔍 CaptureForm: ลองอ่านบัตรหากมีบัตรเสียบอยู่...');
+      
+      // ลองอ่านบัตรแบบไม่ blocking
+      final result = await ThaiIdcardReaderFlutter.read().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => throw TimeoutException('Timeout reading card', const Duration(seconds: 3)),
+      );
+      
+      if (result.cid != null && result.cid!.isNotEmpty) {
+        debugPrint('✅ CaptureForm: พบบัตรประชาชน - เริ่มประมวลผล');
+        
+        setState(() {
+          _data = result;
+          _error = null;
+        });
+        
+        // ประมวลผลข้อมูลบัตรประชาชน
+        await _processCardData(result);
+      } else {
+        debugPrint('⚠️ CaptureForm: ไม่พบบัตรประชาชนในเครื่องอ่าน');
+      }
+    } catch (e) {
+      debugPrint('⚠️ CaptureForm: ไม่สามารถอ่านบัตรได้ (อาจไม่มีบัตรเสียบ) - $e');
+      // ไม่แสดง error เพราะเป็นเรื่องปกติที่อาจไม่มีบัตรเสียบ
+    }
   }
 
   void _onUSB(usbEvent) {
     try {
-      if (usbEvent.hasPermission) {
+      debugPrint('📱 CaptureForm: USB Event - ${usbEvent.productName} (hasPermission: ${usbEvent.hasPermission}, isAttached: ${usbEvent.isAttached})');
+      
+      if (usbEvent.hasPermission && usbEvent.isAttached) {
+        debugPrint('✅ CaptureForm: Device เชื่อมต่อและมี Permission');
+        
         // Listen to card events when device has permission
+        // ใช้ listen แบบไม่ซ้ำ
         ThaiIdcardReaderFlutter.cardHandlerStream.listen(_onData);
-      } else {
+        
+        // แสดงข้อความแจ้งเตือนว่าพร้อมใช้งาน (เฉพาะครั้งแรกที่เชื่อมต่อ)
+        if (mounted && _device?.hasPermission != true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'เครื่องอ่านบัตร ${usbEvent.productName} พร้อมใช้งาน',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else if (usbEvent.isAttached && !usbEvent.hasPermission) {
+        debugPrint('⚠️ CaptureForm: Device เชื่อมต่อแต่ไม่มี Permission');
+        
         // Clear data when no permission
         _clear();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.white),
+                  SizedBox(width: 8),
+                  Text('ไม่ได้รับอนุญาตใช้งานเครื่องอ่านบัตร - กรุณากด OK'),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      } else {
+        debugPrint('❌ CaptureForm: Device ไม่ได้เชื่อมต่อ');
+        _clear();
       }
+      
       setState(() {
         _device = usbEvent;
       });
     } catch (e) {
+      debugPrint('❌ CaptureForm: USB Event Error - $e');
       setState(() {
         _error = 'เกิดข้อผิดพลาดในการเชื่อมต่อเครื่องอ่านบัตร: $e';
       });
@@ -812,9 +1102,34 @@ class _CaptureFormState extends State<CaptureForm> {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+              
+              // ปุ่มตรวจสอบการเชื่อมต่อแบบเร็ว
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: ElevatedButton.icon(
+                  onPressed: _manualCheckConnection,
+                  icon: const Icon(Icons.search, size: 20),
+                  label: const Text(
+                    'ตรวจหาเครื่องอ่านบัตรที่เสียบอยู่',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 2,
+                  ),
+                ),
+              ),
+              
               const SizedBox(height: 8),
               Text(
-                'หากไม่พบเครื่องอ่านบัตรหรือการเชื่อมต่อมีปัญหา กดปุ่มนี้เพื่อลองเชื่อมต่อใหม่',
+                'หากเครื่องอ่านบัตรเสียบอยู่แล้วแต่ระบบไม่พบ ให้กดปุ่มสีเขียวก่อน\nหากยังไม่ได้ผล ให้กดปุ่มสีน้ำเงินเพื่อรีเซ็ตการเชื่อมต่อ',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 12,

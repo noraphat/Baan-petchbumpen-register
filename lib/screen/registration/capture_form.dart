@@ -9,6 +9,7 @@ import '../../services/enhanced_card_reader_service.dart';
 import '../../services/card_reader_service.dart';
 import '../../services/db_helper.dart';
 import '../../widgets/shared_registration_dialog.dart';
+import '../../utils/privacy_utils.dart';
 
 class CaptureForm extends StatefulWidget {
   const CaptureForm({super.key});
@@ -911,7 +912,7 @@ class _CaptureFormState extends State<CaptureForm> {
                       ),
                       const Divider(),
                       Text('ชื่อ-นามสกุล: ${_currentRegistration!.first} ${_currentRegistration!.last}'),
-                      Text('เลขบัตรประชาชน: ${_currentRegistration!.id}'),
+                      Text('เลขบัตรประชาชน: ${PrivacyUtils.maskThaiIdCard(_currentRegistration!.id)}'),
                       Text('สถานะบัตร: ${_currentRegistration!.hasIdCard ? "ใช้บัตรประชาชน" : "ลงทะเบียนแบบ Manual"}'),
                       Text(
                         'การแก้ไข: ${_currentRegistration!.hasIdCard ? "ห้ามแก้ไขข้อมูลส่วนตัว" : "สามารถแก้ไขได้"}',
@@ -967,7 +968,7 @@ class _CaptureFormState extends State<CaptureForm> {
                     children: [
                       const Text('ข้อมูลส่วนตัว', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                       const Divider(),
-                      if (_data!.cid != null) _buildInfoRow('เลขบัตรประชาชน', _data!.cid!),
+                      if (_data!.cid != null) _buildInfoRow('เลขบัตรประชาชน', PrivacyUtils.maskThaiIdCard(_data!.cid!)),
                       if (_data!.titleTH != null && _data!.firstnameTH != null)
                         _buildInfoRow('ชื่อ-นามสกุล (ไทย)', '${_data!.titleTH} ${_data!.firstnameTH} ${_data!.lastnameTH ?? ''}'),
                       if (_data!.titleEN != null && _data!.firstnameEN != null)

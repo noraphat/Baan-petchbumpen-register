@@ -8,6 +8,7 @@ import '../services/menu_settings_service.dart';
 import '../models/room_model.dart';
 import '../models/reg_data.dart';
 import '../utils/stay_duration_validator.dart';
+import '../utils/privacy_utils.dart';
 import 'test_map_display.dart';
 
 class AccommodationBookingScreen extends StatefulWidget {
@@ -196,7 +197,7 @@ class _AccommodationBookingScreenState
             Text(
               'ผู้เข้าพัก: ${occupantInfo['first_name']} ${occupantInfo['last_name']}',
             ),
-            Text('เบอร์โทร: ${occupantInfo['phone']}'),
+            Text('เบอร์โทร: ${PrivacyUtils.getDisplayText(occupantInfo['phone'], fieldType: 'phone')}'),
             Text(
               'วันที่เข้าพัก: ${_formatDate(occupantInfo['check_in_date'])}',
             ),
@@ -1075,7 +1076,7 @@ class _AccommodationBookingScreenState
                                 '${practitioner.first} ${practitioner.last}',
                               ),
                               subtitle: Text(
-                                'เบอร์โทร: ${practitioner.phone}\n'
+                                'เบอร์โทร: ${PrivacyUtils.getDisplayText(practitioner.phone, fieldType: 'phone')}\n'
                                 'เพศ: ${practitioner.gender}',
                               ),
                               leading: CircleAvatar(

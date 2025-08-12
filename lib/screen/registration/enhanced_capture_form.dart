@@ -5,6 +5,7 @@ import '../../services/card_reader_service.dart';
 import '../../services/db_helper.dart';
 import '../../widgets/card_reader_widgets.dart';
 import '../../widgets/shared_registration_dialog.dart';
+import '../../utils/privacy_utils.dart';
 
 /// Enhanced version ของ CaptureForm ที่ใช้ CardReaderService
 class EnhancedCaptureForm extends StatefulWidget {
@@ -572,7 +573,7 @@ class _EnhancedCaptureFormState extends State<EnhancedCaptureForm>
                         Text(
                           'ชื่อ-นามสกุล: ${_currentRegistration!.first} ${_currentRegistration!.last}',
                         ),
-                        Text('เลขบัตรประชาชน: ${_currentRegistration!.id}'),
+                        Text('เลขบัตรประชาชน: ${PrivacyUtils.maskThaiIdCard(_currentRegistration!.id)}'),
                         Text(
                           'สถานะบัตร: ${_currentRegistration!.hasIdCard ? "ใช้บัตรประชาชน" : "ลงทะเบียนแบบ Manual"}',
                         ),

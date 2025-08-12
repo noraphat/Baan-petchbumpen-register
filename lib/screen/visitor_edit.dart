@@ -4,6 +4,7 @@ import '../services/db_helper.dart';
 import '../services/address_service.dart';
 import '../widgets/buddhist_calendar_picker.dart';
 import '../utils/phone_validator.dart';
+import '../utils/privacy_utils.dart';
 
 class VisitorEditScreen extends StatefulWidget {
   final RegData visitor;
@@ -259,7 +260,7 @@ class _VisitorEditScreenState extends State<VisitorEditScreen> {
                             
                             // ข้อมูลที่ไม่สามารถแก้ไขได้ (สำหรับคนมีบัตร)
                             if (widget.visitor.hasIdCard) ...[
-                              _buildReadOnlyField('เลขบัตรประชาชน', widget.visitor.id),
+                              _buildReadOnlyField('เลขบัตรประชาชน', PrivacyUtils.maskThaiIdCard(widget.visitor.id)),
                               const SizedBox(height: 16),
                               _buildReadOnlyField('ชื่อ', widget.visitor.first),
                               const SizedBox(height: 16),

@@ -17,7 +17,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
   final SummaryService _summaryService = SummaryService();
   final BookingService _bookingService = BookingService();
   final MenuSettingsService _menuSettings = MenuSettingsService();
-  late TabController _tabController;
+  TabController? _tabController;
 
   DateTime _selectedDate = DateTime.now();
   String _selectedPeriod =
@@ -61,7 +61,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
@@ -156,8 +156,8 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
             ],
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
+        bottom: _tabController != null ? TabBar(
+          controller: _tabController!,
           indicatorColor: Colors.white,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
@@ -166,7 +166,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
             if (_isBookingMenuEnabled) 
               const Tab(icon: Icon(Icons.hotel), text: 'ห้องพัก'),
           ],
-        ),
+        ) : null,
       ),
       body: Column(
         children: [
@@ -174,8 +174,8 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : TabBarView(
-                    controller: _tabController,
+                : _tabController != null ? TabBarView(
+                    controller: _tabController!,
                     children: [
                       // แท็บผู้ปฏิบัติธรรม (ของเดิม)
                       _selectedPeriod == 'today'
@@ -185,7 +185,7 @@ class _DailySummaryScreenState extends State<DailySummaryScreen>
                       if (_isBookingMenuEnabled)
                         _buildRoomSummaryView(),
                     ],
-                  ),
+                  ) : const Center(child: CircularProgressIndicator()),
           ),
         ],
       ),

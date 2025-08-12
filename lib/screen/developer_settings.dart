@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/db_helper.dart';
 import '../models/reg_data.dart';
+import '../utils/privacy_utils.dart';
 import 'map_management_screen.dart';
 
 class DeveloperSettingsScreen extends StatefulWidget {
@@ -299,7 +300,7 @@ class _DeveloperSettingsScreenState extends State<DeveloperSettingsScreen> {
                                         const SizedBox(width: 6),
                                         Expanded(
                                           child: Text(
-                                            'โทร: ${record.phone.isEmpty ? '-' : record.phone}',
+                                            'โทร: ${record.phone.isEmpty ? '-' : PrivacyUtils.getDisplayText(record.phone, fieldType: 'phone')}',
                                             style: const TextStyle(color: Colors.grey),
                                           ),
                                         ),

@@ -741,11 +741,9 @@ class _MapManagementScreenState extends State<MapManagementScreen>
         builder: (context, setDialogState) => AlertDialog(
           title: Text(isEditing ? 'แก้ไขห้องพัก' : 'เพิ่มห้องพักใหม่'),
           contentPadding: const EdgeInsets.fromLTRB(20.0, 20.0, 20.0, 0.0),
-          content: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: double.maxFinite,
-              maxHeight: MediaQuery.of(context).size.height * 0.7,
-            ),
+          content: SizedBox(
+            width: 400,
+            height: MediaQuery.of(context).size.height * 0.7,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -799,13 +797,15 @@ class _MapManagementScreenState extends State<MapManagementScreen>
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Container(
+                                    SizedBox(
                                       width: 20,
                                       height: 12,
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue.withValues(alpha: 0.6),
-                                        border: Border.all(color: Colors.blue, width: 1),
-                                        borderRadius: BorderRadius.circular(2),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.withValues(alpha: 0.6),
+                                          border: Border.all(color: Colors.blue, width: 1),
+                                          borderRadius: BorderRadius.circular(2),
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 8),

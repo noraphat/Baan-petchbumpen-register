@@ -22,21 +22,20 @@ class _HomeScreenState extends State<HomeScreen> {
   // Secret Developer Mode variables
   int _logoTapCount = 0;
   Timer? _tapTimer;
-  
+
   // Menu visibility states
   bool _whiteRobeEnabled = false;
-  bool _bookingEnabled = true;  // เปิดเมนูจองที่พักให้แสดง
+  bool _bookingEnabled = true; // เปิดเมนูจองที่พักให้แสดง
   bool _scheduleEnabled = true;
   bool _summaryEnabled = true;
-
 
   // Secret Developer Mode activation
   void _onLogoTap() {
     _logoTapCount++;
-    
+
     // Reset timer if it exists
     _tapTimer?.cancel();
-    
+
     // Start new timer - reset count after 5 seconds
     _tapTimer = Timer(const Duration(seconds: 5), () {
       if (mounted) {
@@ -45,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     });
-    
+
     // Check if reached 12 taps
     if (_logoTapCount >= 12) {
       _activateSecretMode();
@@ -55,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _activateSecretMode() {
     _logoTapCount = 0; // Reset counter
     _tapTimer?.cancel();
-    
+
     // Show toast message
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -78,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-    
+
     // Navigate to Admin Settings after a short delay
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) {
@@ -93,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (context) => const AdminSettings()),
     );
-    
+
     // Refresh menu settings when returning from Admin Settings
     _loadMenuSettings();
   }
@@ -104,26 +103,25 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-
   @override
   void initState() {
     super.initState();
     _loadMenuSettings();
   }
-  
+
   Future<void> _loadMenuSettings() async {
     final menuService = MenuSettingsService();
     final whiteRobeEnabled = await menuService.isWhiteRobeEnabled;
     final bookingEnabled = await menuService.isBookingEnabled;
     final scheduleEnabled = await menuService.isScheduleEnabled;
     final summaryEnabled = await menuService.isSummaryEnabled;
-    
+
     debugPrint('Loading menu settings:');
     debugPrint('White Robe: $whiteRobeEnabled');
     debugPrint('Booking: $bookingEnabled');
     debugPrint('Schedule: $scheduleEnabled');
     debugPrint('Summary: $summaryEnabled');
-    
+
     setState(() {
       _whiteRobeEnabled = whiteRobeEnabled;
       _bookingEnabled = bookingEnabled;
@@ -191,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       },
     ];
-    
+
     // Filter items to only show enabled ones
     final items = allItems.where((item) => item['enabled'] == true).toList();
 
@@ -202,11 +200,7 @@ class _HomeScreenState extends State<HomeScreen> {
           onTap: _onLogoTap,
           child: Row(
             children: [
-              Icon(
-                Icons.spa,
-                color: Colors.purple,
-                size: 32,
-              ), // โลโก้เดิม
+              Icon(Icons.spa, color: Colors.purple, size: 32), // โลโก้เดิม
               const SizedBox(width: 8),
               const Text(
                 'บ้านเพชรบำเพ็ญ',
@@ -231,7 +225,10 @@ class _HomeScreenState extends State<HomeScreen> {
               if (kDebugMode && _logoTapCount > 0) ...[
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.orange,
                     borderRadius: BorderRadius.circular(10),
@@ -254,65 +251,59 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Responsive grid based on screen width
-                  final screenWidth = constraints.maxWidth;
-                  final crossAxisCount = screenWidth < 600 ? 2 : 3;
-                  final childAspectRatio = screenWidth < 400 ? 0.9 : 1.1;
-                  
-                  return GridView.count(
-                    crossAxisCount: crossAxisCount,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: childAspectRatio,
-                    shrinkWrap: true,
-                children: items.map((item) {
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: item['onTap'] as void Function(),
-                    child: Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              item['icon'] as IconData,
-                              size: screenWidth < 400 ? 32 : 40,
-                              color: Colors.purple,
-                            ),
-                            SizedBox(height: screenWidth < 400 ? 8 : 12),
-                            Flexible(
-                              child: Text(
-                                item['label'] as String,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: screenWidth < 400 ? 13 : 16,
-                                ),
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Responsive grid based on screen width
+            final screenWidth = constraints.maxWidth;
+            final crossAxisCount = screenWidth < 600 ? 2 : 3;
+            final childAspectRatio = screenWidth < 400 ? 0.9 : 1.1;
+
+            return GridView.count(
+              crossAxisCount: crossAxisCount,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: childAspectRatio,
+              shrinkWrap: true,
+              children: items.map((item) {
+                return InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: item['onTap'] as void Function(),
+                  child: Card(
+                    elevation: 4,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            item['icon'] as IconData,
+                            size: screenWidth < 400 ? 32 : 40,
+                            color: Colors.purple,
+                          ),
+                          SizedBox(height: screenWidth < 400 ? 8 : 12),
+                          Flexible(
+                            child: Text(
+                              item['label'] as String,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: screenWidth < 400 ? 13 : 16,
                               ),
+                              textAlign: TextAlign.center,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                }).toList(),
-                  );
-                },
-              ),
-            ),
-          ],
+                  ),
+                );
+              }).toList(),
+            );
+          },
         ),
       ),
     );

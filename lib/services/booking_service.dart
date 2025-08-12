@@ -221,7 +221,7 @@ class BookingService {
       final result = await db.rawQuery(
         '''
         SELECT 
-          rb.room_name,
+          r.name as room_name,
           COUNT(DISTINCT rb.id) as total_bookings,
           COALESCE(SUM(JULIANDAY(rb.check_out_date) - JULIANDAY(rb.check_in_date)), 0) as usage_days,
           CASE 
@@ -233,15 +233,16 @@ class BookingService {
           COALESCE((COUNT(DISTINCT rb.id) * 100.0 / (JULIANDAY(?) - JULIANDAY(?) + 1)), 0.0) as occupancy_rate,
           MAX(rb.check_in_date) as last_check_in,
           MAX(rb.check_out_date) as last_check_out,
-          'ไม่ระบุ' as room_size,
+          r.size as room_size,
           '' as guest_name,
           0 as is_single_day
         FROM room_bookings rb
+        JOIN rooms r ON rb.room_id = r.id
         WHERE rb.check_in_date <= ? 
           AND rb.check_out_date >= ?
           AND rb.status != 'cancelled'
-        GROUP BY rb.room_name
-        ORDER BY rb.room_name
+        GROUP BY r.name, r.size
+        ORDER BY r.name
       ''',
         [
           endDate.toIso8601String(),

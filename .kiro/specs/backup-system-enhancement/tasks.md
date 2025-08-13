@@ -41,7 +41,7 @@
   - เขียน unit tests สำหรับ SQL generation และ file creation
   - _Requirements: 2.4, 2.5, 3.4, 3.5_
 
-- [ ] 5. Implement AutoBackupService
+- [x] 5. Implement AutoBackupService
 
   - สร้าง AutoBackupService class สำหรับ auto backup รายวัน
   - Implement การตรวจสอบว่าไฟล์ backup วันนั้นมีอยู่แล้วหรือไม่

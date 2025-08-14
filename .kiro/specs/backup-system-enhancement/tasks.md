@@ -60,7 +60,7 @@
   - เขียน unit tests สำหรับ restore process และ error handling
   - _Requirements: 3.1, 3.2, 3.4, 3.5, 3.6, 3.9_
 
-- [ ] 7. Integrate Services ใน BackupService หลัก
+- [x] 7. Integrate Services ใน BackupService หลัก
 
   - รวม services ทั้งหมดเข้าใน BackupService class
   - Implement error handling และ logging สำหรับทุก operations

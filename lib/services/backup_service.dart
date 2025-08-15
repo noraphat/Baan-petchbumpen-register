@@ -4,6 +4,7 @@ import '../models/backup_info.dart';
 import 'backup_exceptions.dart';
 import 'backup_logger.dart';
 import 'backup_notification_service.dart';
+import 'backup_security_service.dart';
 import 'restore_service.dart';
 import 'json_export_service.dart';
 import 'auto_backup_service.dart';
@@ -22,7 +23,8 @@ class BackupService {
   }
 
   BackupService._() {
-    _restoreService = RestoreService();
+    _securityService = BackupSecurityService();
+    _restoreService = RestoreService(securityService: _securityService);
     _jsonExportService = JsonExportService();
     _autoBackupService = AutoBackupService();
     _sqlExportService = SqlExportService();
@@ -44,6 +46,7 @@ class BackupService {
   late final AutoBackupService _autoBackupService;
   late final SqlExportService _sqlExportService;
   late final FileManagementService _fileManagementService;
+  late final BackupSecurityService _securityService;
   late final BackupLogger _logger;
   late final BackupNotificationService _notificationService;
 
@@ -449,6 +452,14 @@ class BackupService {
         _progressController.add('Validating backup file...');
         _progressPercentController.add(0.1);
 
+        // Validate file path for security
+        try {
+          await _securityService.validateFilePath(filePath);
+        } on SecurityException catch (e) {
+          _logger.error('File path security validation failed', operation: 'Restore', error: e);
+          throw e;
+        }
+
         // Validate file exists and is readable
         final fileName = filePath.split('/').last;
         if (!await _fileManagementService.backupFileExists(fileName)) {
@@ -460,14 +471,19 @@ class BackupService {
           throw error;
         }
 
-        // Validate backup file format
-        final isValid = await _restoreService.validateBackupFile(filePath);
-        if (!isValid) {
-          final error = InvalidBackupFileException(
-            'Invalid backup file format: $filePath'
-          );
-          _logger.error('Invalid backup file format', operation: 'Restore', error: error);
-          throw error;
+        // Comprehensive backup file validation including security checks
+        try {
+          final isValid = await _securityService.validateBackupFile(filePath);
+          if (!isValid) {
+            final error = InvalidBackupFileException(
+              'Backup file failed security validation: $filePath'
+            );
+            _logger.error('Backup file security validation failed', operation: 'Restore', error: error);
+            throw error;
+          }
+        } on SecurityException catch (e) {
+          _logger.error('Backup file contains security violations', operation: 'Restore', error: e);
+          throw e;
         }
 
         _notificationService.showProgress(

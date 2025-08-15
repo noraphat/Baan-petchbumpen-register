@@ -81,3 +81,36 @@ class DatabaseBackupException extends BackupException {
     return 'DatabaseBackupException: $message';
   }
 }
+
+/// Exception for security violations during backup operations
+class SecurityException extends BackupException {
+  const SecurityException(String message)
+      : super(message, code: 'SECURITY_VIOLATION');
+  
+  @override
+  String toString() {
+    return 'SecurityException: $message';
+  }
+}
+
+/// Exception for file path validation failures
+class InvalidFilePathException extends SecurityException {
+  const InvalidFilePathException(String message)
+      : super('Invalid file path: $message');
+  
+  @override
+  String toString() {
+    return 'InvalidFilePathException: $message';
+  }
+}
+
+/// Exception for SQL content validation failures
+class UnsafeSqlException extends SecurityException {
+  const UnsafeSqlException(String message)
+      : super('Unsafe SQL content detected: $message');
+  
+  @override
+  String toString() {
+    return 'UnsafeSqlException: $message';
+  }
+}

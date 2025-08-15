@@ -102,7 +102,7 @@
   - เขียน tests สำหรับ error scenarios และ user feedback
   - _Requirements: 1.4, 1.5, 2.7, 3.7, 3.8, 6.6, 6.7_
 
-- [ ] 12. Add File Validation และ Security
+- [x] 12. Add File Validation และ Security
 
   - Implement backup file validation สำหรับ restore operations
   - เพิ่ม security checks สำหรับ file paths และ SQL content

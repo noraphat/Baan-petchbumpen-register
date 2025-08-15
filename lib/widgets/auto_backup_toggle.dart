@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/backup_service.dart';
+import '../services/backup_error_handler.dart';
 
 
 class AutoBackupToggle extends StatefulWidget {
@@ -63,48 +64,27 @@ class _AutoBackupToggleState extends State<AutoBackupToggle> {
       widget.onToggleChanged?.call();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  value ? Icons.check_circle : Icons.info,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  value 
-                      ? 'เปิดใช้งานสำรองข้อมูลอัตโนมัติแล้ว'
-                      : 'ปิดใช้งานสำรองข้อมูลอัตโนมัติแล้ว',
-                ),
-              ],
-            ),
-            backgroundColor: value ? Colors.green : Colors.orange,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        if (value) {
+          BackupErrorHandler.instance.showSuccess(
+            context,
+            'เปิดใช้งานสำรองข้อมูลอัตโนมัติแล้ว',
+            icon: Icons.check_circle,
+          );
+        } else {
+          BackupErrorHandler.instance.showWarning(
+            context,
+            'ปิดใช้งานสำรองข้อมูลอัตโนมัติแล้ว',
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(
-                  Icons.error,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('เกิดข้อผิดพลาด: $e'),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
+        // Handle error using error handler with retry option
+        BackupErrorHandler.instance.handleError(
+          context,
+          e,
+          operation: 'Auto Backup Toggle',
+          onRetry: () => _toggleAutoBackup(value),
         );
       }
     } finally {

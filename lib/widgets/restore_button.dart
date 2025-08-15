@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/backup_service.dart';
+import '../services/backup_error_handler.dart';
 
 class RestoreButton extends StatefulWidget {
   final BackupService backupService;
@@ -60,24 +61,11 @@ class _RestoreButtonState extends State<RestoreButton>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(
-                  Icons.error,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('เกิดข้อผิดพลาดในการเลือกไฟล์: $e'),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-          ),
+        BackupErrorHandler.instance.handleError(
+          context,
+          e,
+          operation: 'File Selection',
+          onRetry: _pickFile,
         );
       }
     }
@@ -273,27 +261,11 @@ class _RestoreButtonState extends State<RestoreButton>
           _selectedFilePath = null;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'กู้คืนข้อมูลเรียบร้อยแล้ว\nแอปจะรีสตาร์ทเพื่อโหลดข้อมูลใหม่',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
+        BackupErrorHandler.instance.showSuccess(
+          context,
+          'กู้คืนข้อมูลเรียบร้อยแล้ว',
+          details: 'แอปจะรีสตาร์ทเพื่อโหลดข้อมูลใหม่',
+          duration: const Duration(seconds: 3),
         );
 
         widget.onRestoreComplete?.call();
@@ -307,25 +279,11 @@ class _RestoreButtonState extends State<RestoreButton>
           _isRestoring = false;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(
-                  Icons.error,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('เกิดข้อผิดพลาดในการกู้คืนข้อมูล: $e'),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-          ),
+        BackupErrorHandler.instance.handleError(
+          context,
+          e,
+          operation: 'Restore',
+          onRetry: _performRestore,
         );
       }
     }

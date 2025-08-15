@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/backup_service.dart';
+import '../services/backup_error_handler.dart';
 
 class JsonExportButton extends StatefulWidget {
   final BackupService backupService;
@@ -76,41 +77,12 @@ class _JsonExportButtonState extends State<JsonExportButton>
           _progress = 1.0;
         });
 
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(
-                  Icons.check_circle,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        'ส่งออกข้อมูล JSON เรียบร้อยแล้ว',
-                        style: TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                      Text(
-                        'บันทึกที่: $filePath',
-                        style: const TextStyle(fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-          ),
+        // Show success message using error handler
+        BackupErrorHandler.instance.showSuccess(
+          context,
+          'ส่งออกข้อมูล JSON เรียบร้อยแล้ว',
+          details: 'บันทึกที่: $filePath',
+          icon: Icons.check_circle,
         );
 
         widget.onExportComplete?.call();
@@ -125,25 +97,12 @@ class _JsonExportButtonState extends State<JsonExportButton>
           _progress = 0.0;
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(
-                  Icons.error,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text('เกิดข้อผิดพลาดในการส่งออกข้อมูล: $e'),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-          ),
+        // Handle error using error handler with retry option
+        BackupErrorHandler.instance.handleError(
+          context,
+          e,
+          operation: 'JSON Export',
+          onRetry: _exportToJson,
         );
       }
     }

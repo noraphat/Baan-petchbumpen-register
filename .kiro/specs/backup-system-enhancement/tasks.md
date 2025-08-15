@@ -77,7 +77,7 @@
   - เขียน widget tests สำหรับ UI components
   - _Requirements: 5.4, 5.5, 5.6, 5.8_
 
-- [ ] 9. Update Developer Settings Screen
+- [x] 9. Update Developer Settings Screen
 
   - ลบ "Export รายงาน PDF" และ "Import ข้อมูล" options
   - เพิ่ม backup section ใหม่พร้อม updated UI

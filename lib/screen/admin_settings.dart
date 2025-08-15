@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/db_helper.dart';
 import '../services/menu_settings_service.dart';
+import '../services/backup_service.dart';
+import '../widgets/backup_settings_widget.dart';
 import 'developer_settings.dart';
 import 'data_management_screen.dart';
 import 'map_management_screen.dart';
@@ -18,8 +20,8 @@ class _AdminSettingsState extends State<AdminSettings> {
   bool _bookingEnabled = false; // ค่าเริ่มต้นปิด
   bool _debugRoomMenuEnabled = false; // ค่าเริ่มต้นปิด
 
-  // Auto backup toggle
-  bool _autoBackupEnabled = false;
+  // Backup service
+  BackupService get _backupService => BackupService.instance;
 
   // System info
   int _totalRegistered = 0;
@@ -63,101 +65,7 @@ class _AdminSettingsState extends State<AdminSettings> {
     }
   }
 
-  Future<void> _showStatistics() async {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.bar_chart, size: 24, color: Colors.purple),
-            const SizedBox(width: 8),
-            const Text('สถิติฐานข้อมูล'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('จำนวนผู้ลงทะเบียนทั้งหมด: $_totalRegistered คน'),
-            Text('ผู้เข้าพักปัจจุบัน: $_currentStays คน'),
-            Text('ขนาดฐานข้อมูล: ${_dbSizeKB.toStringAsFixed(1)} MB'),
-            const SizedBox(height: 16),
-            const Text('รายละเอียดเพิ่มเติมจะแสดงในเวอร์ชันถัดไป'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ปิด'),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Future<void> _clearTestData() async {
-    // Show confirmation dialog
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.warning, size: 24, color: Colors.orange),
-            const SizedBox(width: 8),
-            const Text('ยืนยันการลบ'),
-          ],
-        ),
-        content: const Text('คุณต้องการล้างข้อมูลทดสอบใช่หรือไม่?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('ยกเลิก'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('ยืนยัน', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      try {
-        // TODO: Implement clear test data logic
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('ล้างข้อมูลทดสอบเรียบร้อยแล้ว')),
-          );
-          _loadSystemInfo(); // Refresh stats
-        }
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
-        }
-      }
-    }
-  }
-
-  Future<void> _createTestData() async {
-    try {
-      final dbHelper = DbHelper();
-      await dbHelper.createTestData();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('สร้างข้อมูลทดสอบเรียบร้อยแล้ว')),
-        );
-        _loadSystemInfo(); // Refresh stats
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
-      }
-    }
-  }
 
   Future<void> _runSystemTest() async {
     try {
@@ -182,53 +90,40 @@ class _AdminSettingsState extends State<AdminSettings> {
     }
   }
 
-  Future<void> _clearAllData() async {
-    // Show double confirmation dialog
+
+
+  @visibleForTesting
+  Future<bool> showDestructiveOperationConfirmation({
+    required String title,
+    required String message,
+    String confirmText = 'ยืนยัน',
+    String cancelText = 'ยกเลิก',
+  }) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Row(
           children: [
-            const Icon(Icons.dangerous, size: 24, color: Colors.red),
+            const Icon(Icons.warning, size: 24, color: Colors.orange),
             const SizedBox(width: 8),
-            const Text('อันตราย!', style: TextStyle(color: Colors.red)),
+            Text(title),
           ],
         ),
-        content: const Text(
-          'คำเตือน: การลบข้อมูลทั้งหมดไม่สามารถกู้คืนได้!\n\nคุณแน่ใจหรือไม่?',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('ยกเลิก'),
+            child: Text(cancelText),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('ลบทั้งหมด', style: TextStyle(color: Colors.red)),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text(confirmText),
           ),
         ],
       ),
     );
-
-    if (confirmed == true) {
-      try {
-        final dbHelper = DbHelper();
-        await dbHelper.clearAllData();
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('ล้างข้อมูลทั้งหมดเรียบร้อยแล้ว')),
-          );
-          _loadSystemInfo(); // Refresh stats
-        }
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
-        }
-      }
-    }
+    return confirmed ?? false;
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {
@@ -420,50 +315,7 @@ class _AdminSettingsState extends State<AdminSettings> {
 
             // Backup Section
             _buildSectionHeader('สำรองข้อมูล', Icons.save),
-            _buildActionButton('Export ข้อมูลเป็น JSON', Icons.description, () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป'),
-                ),
-              );
-            }),
-            _buildActionButton('Export รายงาน PDF', Icons.picture_as_pdf, () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป'),
-                ),
-              );
-            }),
-            _buildActionButton('Import ข้อมูล', Icons.file_download, () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('ฟีเจอร์นี้จะพร้อมในเวอร์ชันถัดไป'),
-                ),
-              );
-            }),
-            Card(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              child: ListTile(
-                leading: const Icon(Icons.sync, size: 20, color: Colors.purple),
-                title: const Text('Auto Backup รายวัน'),
-                trailing: Switch(
-                  value: _autoBackupEnabled,
-                  onChanged: (value) {
-                    setState(() => _autoBackupEnabled = value);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          value
-                              ? 'เปิด Auto Backup รายวันแล้ว'
-                              : 'ปิด Auto Backup รายวันแล้ว',
-                        ),
-                      ),
-                    );
-                  },
-                  activeColor: Colors.purple,
-                ),
-              ),
-            ),
+            BackupSettingsWidget(backupService: _backupService),
 
             // System Info Section
             _buildSectionHeader('ข้อมูลระบบ', Icons.info),

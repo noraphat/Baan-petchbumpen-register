@@ -9,8 +9,24 @@ class DbHelper {
   DbHelper._internal();
 
   Database? _db;
+  static Database? _testDatabase;
+
+  /// Set test database for performance testing
+  static void setTestDatabase(Database testDb) {
+    _testDatabase = testDb;
+  }
+
+  /// Clear test database reference
+  static void clearTestDatabase() {
+    _testDatabase = null;
+  }
 
   Future<Database> get db async {
+    // Use test database if available (for performance testing)
+    if (_testDatabase != null) {
+      return _testDatabase!;
+    }
+    
     _db ??= await _init();
     return _db!;
   }

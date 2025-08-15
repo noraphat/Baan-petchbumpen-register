@@ -68,7 +68,7 @@
   - เขียน integration tests สำหรับ end-to-end backup workflows
   - _Requirements: 1.5, 2.7, 3.7, 3.8, 6.6, 6.7_
 
-- [ ] 8. สร้าง UI Components สำหรับ Developer Settings
+- [x] 8. สร้าง UI Components สำหรับ Developer Settings
 
   - สร้าง BackupSettingsWidget สำหรับแสดง backup options
   - สร้าง JsonExportButton พร้อม progress indicator

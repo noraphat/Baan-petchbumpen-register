@@ -86,7 +86,7 @@
   - เขียน integration tests สำหรับ updated settings screen
   - _Requirements: 5.1, 5.2, 5.3, 3.3_
 
-- [ ] 10. Implement Auto Backup Scheduling
+- [x] 10. Implement Auto Backup Scheduling
 
   - สร้าง background service สำหรับ auto backup scheduling
   - Implement การตรวจสอบและทำ backup เมื่อเปิดแอป

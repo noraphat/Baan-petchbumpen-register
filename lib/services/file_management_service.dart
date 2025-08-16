@@ -1,16 +1,18 @@
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'backup_exceptions.dart';
+import 'platform_file_service.dart';
 
 /// Service for managing backup files and storage operations
 class FileManagementService {
   static const String _backupDirectoryName = 'backups';
   static const int _defaultMaxBackupDays = 31;
+  
+  final PlatformFileService _platformService = PlatformFileService();
 
-  /// Get the backup directory path
+  /// Get the backup directory path using platform-specific logic
   Future<String> getBackupDirectory() async {
-    final appDocDir = await getApplicationDocumentsDirectory();
-    return '${appDocDir.path}/$_backupDirectoryName';
+    return await _platformService.getBackupDirectory();
   }
 
   /// Ensure backup directory exists, create if it doesn't
@@ -85,9 +87,14 @@ class FileManagementService {
   /// Check if the app has write permission for storage
   Future<bool> hasWritePermission() async {
     try {
-      // For modern Android and iOS, apps can always write to their app-specific directories
-      // We'll test this by attempting to write to the app directory
-      return await _canWriteToAppDirectory();
+      // Use platform-specific permission checking
+      final hasPermission = await _platformService.hasStoragePermission();
+      if (!hasPermission) {
+        return false;
+      }
+      
+      // Also test actual write capability
+      return await _platformService.canWriteToBackupDirectory();
     } catch (e) {
       return false;
     }
@@ -96,11 +103,18 @@ class FileManagementService {
   /// Request write permission from user
   Future<void> requestWritePermission() async {
     try {
-      // For app-specific directories, no explicit permission is needed on modern platforms
-      // We'll verify we can write to the app directory
-      if (!await _canWriteToAppDirectory()) {
+      // Request platform-specific permissions
+      final granted = await _platformService.requestStoragePermission();
+      if (!granted) {
         throw FilePermissionException(
-          'Cannot write to app documents directory'
+          'Storage permission denied by user'
+        );
+      }
+      
+      // Verify we can actually write to the backup directory
+      if (!await _platformService.canWriteToBackupDirectory()) {
+        throw FilePermissionException(
+          'Cannot write to backup directory even with permission'
         );
       }
     } catch (e) {
@@ -116,17 +130,7 @@ class FileManagementService {
   /// Get available storage space in bytes
   Future<int> getAvailableStorageSpace() async {
     try {
-      final backupDir = await getBackupDirectory();
-      final directory = Directory(backupDir);
-      
-      // This is a simplified implementation
-      // In a real app, you might want to use a plugin like device_info_plus
-      // to get actual storage information
-      final stat = await directory.stat();
-      
-      // Return a large number as placeholder since we can't easily get
-      // actual available space without additional plugins
-      return 1024 * 1024 * 1024; // 1GB placeholder
+      return await _platformService.getAvailableStorageSpace();
     } catch (e) {
       throw BackupException(
         'Failed to get storage space: ${e.toString()}',
@@ -210,18 +214,80 @@ class FileManagementService {
     }
   }
 
-  /// Private method to test if we can write to app directory
-  Future<bool> _canWriteToAppDirectory() async {
+  /// Check if external storage is available (Android only)
+  Future<bool> isExternalStorageAvailable() async {
+    return await _platformService.isExternalStorageAvailable();
+  }
+
+  /// Get platform-specific shareable directory for backup files
+  Future<String?> getShareableDirectory() async {
+    return await _platformService.getShareableDirectory();
+  }
+
+  /// Get supported backup file extensions for current platform
+  List<String> getSupportedBackupExtensions() {
+    return _platformService.getSupportedBackupExtensions();
+  }
+
+  /// Get maximum recommended backup file size for current platform
+  int getMaxBackupFileSize() {
+    return _platformService.getMaxBackupFileSize();
+  }
+
+  /// Check if platform supports background backup operations
+  bool supportsBackgroundBackup() {
+    return _platformService.supportsBackgroundBackup();
+  }
+
+  /// Get recommended backup frequency for current platform
+  Duration getRecommendedBackupFrequency() {
+    return _platformService.getRecommendedBackupFrequency();
+  }
+
+  /// Copy backup file to shareable location (for sharing with other apps)
+  Future<String?> copyBackupToShareableLocation(String fileName) async {
     try {
-      final appDocDir = await getApplicationDocumentsDirectory();
-      final testFile = File('${appDocDir.path}/test_write.tmp');
+      final shareableDir = await getShareableDirectory();
+      if (shareableDir == null) {
+        return null;
+      }
+
+      final backupDir = await getBackupDirectory();
+      final sourceFile = File('$backupDir/$fileName');
       
-      await testFile.writeAsString('test');
-      await testFile.delete();
+      if (!await sourceFile.exists()) {
+        throw BackupException(
+          'Source backup file not found: $fileName',
+          code: 'SOURCE_FILE_NOT_FOUND',
+        );
+      }
+
+      final targetPath = '$shareableDir/$fileName';
+      final targetFile = await sourceFile.copy(targetPath);
       
-      return true;
+      return targetFile.path;
+    } catch (e) {
+      throw BackupException(
+        'Failed to copy backup to shareable location: ${e.toString()}',
+        code: 'COPY_TO_SHAREABLE_FAILED',
+        originalError: e,
+      );
+    }
+  }
+
+  /// Validate backup file size against platform limits
+  Future<bool> isBackupFileSizeValid(String fileName) async {
+    try {
+      final fileSize = await getBackupFileSize(fileName);
+      final maxSize = getMaxBackupFileSize();
+      return fileSize <= maxSize;
     } catch (e) {
       return false;
     }
+  }
+
+  /// Private method to test if we can write to app directory
+  Future<bool> _canWriteToAppDirectory() async {
+    return await _platformService.canWriteToBackupDirectory();
   }
 }

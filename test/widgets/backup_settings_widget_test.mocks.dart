@@ -3,15 +3,19 @@
 // Do not manually edit this file.
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
-import 'dart:async' as _i4;
+import 'dart:async' as _i6;
 
-import 'package:flutter_petchbumpen_register/models/backup_info.dart' as _i6;
+import 'package:flutter_petchbumpen_register/models/backup_info.dart' as _i8;
 import 'package:flutter_petchbumpen_register/models/backup_settings.dart'
+    as _i4;
+import 'package:flutter_petchbumpen_register/services/backup_logger.dart'
     as _i2;
-import 'package:flutter_petchbumpen_register/services/backup_service.dart'
+import 'package:flutter_petchbumpen_register/services/backup_notification_service.dart'
     as _i3;
+import 'package:flutter_petchbumpen_register/services/backup_service.dart'
+    as _i5;
 import 'package:mockito/mockito.dart' as _i1;
-import 'package:mockito/src/dummies.dart' as _i5;
+import 'package:mockito/src/dummies.dart' as _i7;
 
 // ignore_for_file: type=lint
 // ignore_for_file: avoid_redundant_argument_values
@@ -27,92 +31,130 @@ import 'package:mockito/src/dummies.dart' as _i5;
 // ignore_for_file: camel_case_types
 // ignore_for_file: subtype_of_sealed_class
 
-class _FakeBackupSettings_0 extends _i1.SmartFake
-    implements _i2.BackupSettings {
-  _FakeBackupSettings_0(Object parent, Invocation parentInvocation)
+class _FakeBackupLogger_0 extends _i1.SmartFake implements _i2.BackupLogger {
+  _FakeBackupLogger_0(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeBackupNotificationService_1 extends _i1.SmartFake
+    implements _i3.BackupNotificationService {
+  _FakeBackupNotificationService_1(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
+class _FakeBackupSettings_2 extends _i1.SmartFake
+    implements _i4.BackupSettings {
+  _FakeBackupSettings_2(Object parent, Invocation parentInvocation)
     : super(parent, parentInvocation);
 }
 
 /// A class which mocks [BackupService].
 ///
 /// See the documentation for Mockito's code generation for more information.
-class MockBackupService extends _i1.Mock implements _i3.BackupService {
+class MockBackupService extends _i1.Mock implements _i5.BackupService {
   @override
-  _i4.Stream<String> get progressStream =>
+  _i6.Stream<String> get progressStream =>
       (super.noSuchMethod(
             Invocation.getter(#progressStream),
-            returnValue: _i4.Stream<String>.empty(),
-            returnValueForMissingStub: _i4.Stream<String>.empty(),
+            returnValue: _i6.Stream<String>.empty(),
+            returnValueForMissingStub: _i6.Stream<String>.empty(),
           )
-          as _i4.Stream<String>);
+          as _i6.Stream<String>);
 
   @override
-  _i4.Stream<double> get progressPercentStream =>
+  _i6.Stream<double> get progressPercentStream =>
       (super.noSuchMethod(
             Invocation.getter(#progressPercentStream),
-            returnValue: _i4.Stream<double>.empty(),
-            returnValueForMissingStub: _i4.Stream<double>.empty(),
+            returnValue: _i6.Stream<double>.empty(),
+            returnValueForMissingStub: _i6.Stream<double>.empty(),
           )
-          as _i4.Stream<double>);
+          as _i6.Stream<double>);
 
   @override
-  _i4.Future<String> exportToJson() =>
+  _i2.BackupLogger get logger =>
+      (super.noSuchMethod(
+            Invocation.getter(#logger),
+            returnValue: _FakeBackupLogger_0(this, Invocation.getter(#logger)),
+            returnValueForMissingStub: _FakeBackupLogger_0(
+              this,
+              Invocation.getter(#logger),
+            ),
+          )
+          as _i2.BackupLogger);
+
+  @override
+  _i3.BackupNotificationService get notificationService =>
+      (super.noSuchMethod(
+            Invocation.getter(#notificationService),
+            returnValue: _FakeBackupNotificationService_1(
+              this,
+              Invocation.getter(#notificationService),
+            ),
+            returnValueForMissingStub: _FakeBackupNotificationService_1(
+              this,
+              Invocation.getter(#notificationService),
+            ),
+          )
+          as _i3.BackupNotificationService);
+
+  @override
+  _i6.Future<String> exportToJson() =>
       (super.noSuchMethod(
             Invocation.method(#exportToJson, []),
-            returnValue: _i4.Future<String>.value(
-              _i5.dummyValue<String>(
+            returnValue: _i6.Future<String>.value(
+              _i7.dummyValue<String>(
                 this,
                 Invocation.method(#exportToJson, []),
               ),
             ),
-            returnValueForMissingStub: _i4.Future<String>.value(
-              _i5.dummyValue<String>(
+            returnValueForMissingStub: _i6.Future<String>.value(
+              _i7.dummyValue<String>(
                 this,
                 Invocation.method(#exportToJson, []),
               ),
             ),
           )
-          as _i4.Future<String>);
+          as _i6.Future<String>);
 
   @override
-  _i4.Future<String> exportToSql() =>
+  _i6.Future<String> exportToSql() =>
       (super.noSuchMethod(
             Invocation.method(#exportToSql, []),
-            returnValue: _i4.Future<String>.value(
-              _i5.dummyValue<String>(this, Invocation.method(#exportToSql, [])),
+            returnValue: _i6.Future<String>.value(
+              _i7.dummyValue<String>(this, Invocation.method(#exportToSql, [])),
             ),
-            returnValueForMissingStub: _i4.Future<String>.value(
-              _i5.dummyValue<String>(this, Invocation.method(#exportToSql, [])),
+            returnValueForMissingStub: _i6.Future<String>.value(
+              _i7.dummyValue<String>(this, Invocation.method(#exportToSql, [])),
             ),
           )
-          as _i4.Future<String>);
+          as _i6.Future<String>);
 
   @override
-  _i4.Future<void> enableAutoBackup() =>
+  _i6.Future<void> enableAutoBackup() =>
       (super.noSuchMethod(
             Invocation.method(#enableAutoBackup, []),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i4.Future<void> disableAutoBackup() =>
+  _i6.Future<void> disableAutoBackup() =>
       (super.noSuchMethod(
             Invocation.method(#disableAutoBackup, []),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i4.Future<void> performDailyBackup() =>
+  _i6.Future<void> performDailyBackup() =>
       (super.noSuchMethod(
             Invocation.method(#performDailyBackup, []),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i6.Future<void>);
 
   @override
   bool isAutoBackupEnabled() =>
@@ -124,109 +166,109 @@ class MockBackupService extends _i1.Mock implements _i3.BackupService {
           as bool);
 
   @override
-  _i4.Future<void> restoreFromFile(String? filePath) =>
+  _i6.Future<void> restoreFromFile(String? filePath) =>
       (super.noSuchMethod(
             Invocation.method(#restoreFromFile, [filePath]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i4.Future<void> cleanOldBackups() =>
+  _i6.Future<void> cleanOldBackups() =>
       (super.noSuchMethod(
             Invocation.method(#cleanOldBackups, []),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i4.Future<List<_i6.BackupInfo>> getBackupFiles() =>
+  _i6.Future<List<_i8.BackupInfo>> getBackupFiles() =>
       (super.noSuchMethod(
             Invocation.method(#getBackupFiles, []),
-            returnValue: _i4.Future<List<_i6.BackupInfo>>.value(
-              <_i6.BackupInfo>[],
+            returnValue: _i6.Future<List<_i8.BackupInfo>>.value(
+              <_i8.BackupInfo>[],
             ),
-            returnValueForMissingStub: _i4.Future<List<_i6.BackupInfo>>.value(
-              <_i6.BackupInfo>[],
+            returnValueForMissingStub: _i6.Future<List<_i8.BackupInfo>>.value(
+              <_i8.BackupInfo>[],
             ),
           )
-          as _i4.Future<List<_i6.BackupInfo>>);
+          as _i6.Future<List<_i8.BackupInfo>>);
 
   @override
-  _i4.Future<void> saveBackupSettings(_i2.BackupSettings? settings) =>
+  _i6.Future<void> saveBackupSettings(_i4.BackupSettings? settings) =>
       (super.noSuchMethod(
             Invocation.method(#saveBackupSettings, [settings]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i6.Future<void>);
 
   @override
-  _i4.Future<_i2.BackupSettings> getBackupSettings() =>
+  _i6.Future<_i4.BackupSettings> getBackupSettings() =>
       (super.noSuchMethod(
             Invocation.method(#getBackupSettings, []),
-            returnValue: _i4.Future<_i2.BackupSettings>.value(
-              _FakeBackupSettings_0(
+            returnValue: _i6.Future<_i4.BackupSettings>.value(
+              _FakeBackupSettings_2(
                 this,
                 Invocation.method(#getBackupSettings, []),
               ),
             ),
-            returnValueForMissingStub: _i4.Future<_i2.BackupSettings>.value(
-              _FakeBackupSettings_0(
+            returnValueForMissingStub: _i6.Future<_i4.BackupSettings>.value(
+              _FakeBackupSettings_2(
                 this,
                 Invocation.method(#getBackupSettings, []),
               ),
             ),
           )
-          as _i4.Future<_i2.BackupSettings>);
+          as _i6.Future<_i4.BackupSettings>);
 
   @override
-  _i4.Future<bool> validateBackupFile(String? filePath) =>
+  _i6.Future<bool> validateBackupFile(String? filePath) =>
       (super.noSuchMethod(
             Invocation.method(#validateBackupFile, [filePath]),
-            returnValue: _i4.Future<bool>.value(false),
-            returnValueForMissingStub: _i4.Future<bool>.value(false),
+            returnValue: _i6.Future<bool>.value(false),
+            returnValueForMissingStub: _i6.Future<bool>.value(false),
           )
-          as _i4.Future<bool>);
+          as _i6.Future<bool>);
 
   @override
-  _i4.Future<String> getBackupDirectory() =>
+  _i6.Future<String> getBackupDirectory() =>
       (super.noSuchMethod(
             Invocation.method(#getBackupDirectory, []),
-            returnValue: _i4.Future<String>.value(
-              _i5.dummyValue<String>(
+            returnValue: _i6.Future<String>.value(
+              _i7.dummyValue<String>(
                 this,
                 Invocation.method(#getBackupDirectory, []),
               ),
             ),
-            returnValueForMissingStub: _i4.Future<String>.value(
-              _i5.dummyValue<String>(
+            returnValueForMissingStub: _i6.Future<String>.value(
+              _i7.dummyValue<String>(
                 this,
                 Invocation.method(#getBackupDirectory, []),
               ),
             ),
           )
-          as _i4.Future<String>);
+          as _i6.Future<String>);
 
   @override
-  _i4.Future<int> getAvailableStorageSpace() =>
+  _i6.Future<int> getAvailableStorageSpace() =>
       (super.noSuchMethod(
             Invocation.method(#getAvailableStorageSpace, []),
-            returnValue: _i4.Future<int>.value(0),
-            returnValueForMissingStub: _i4.Future<int>.value(0),
+            returnValue: _i6.Future<int>.value(0),
+            returnValueForMissingStub: _i6.Future<int>.value(0),
           )
-          as _i4.Future<int>);
+          as _i6.Future<int>);
 
   @override
-  _i4.Future<void> deleteBackupFile(String? fileName) =>
+  _i6.Future<void> deleteBackupFile(String? fileName) =>
       (super.noSuchMethod(
             Invocation.method(#deleteBackupFile, [fileName]),
-            returnValue: _i4.Future<void>.value(),
-            returnValueForMissingStub: _i4.Future<void>.value(),
+            returnValue: _i6.Future<void>.value(),
+            returnValueForMissingStub: _i6.Future<void>.value(),
           )
-          as _i4.Future<void>);
+          as _i6.Future<void>);
 
   @override
   void dispose() => super.noSuchMethod(

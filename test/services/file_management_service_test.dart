@@ -48,6 +48,78 @@ void main() {
 
     group('File Filtering Logic', () {
       test('should identify backup file extensions correctly', () {
+        // Test the supported extensions logic
+        final extensions = service.getSupportedBackupExtensions();
+        expect(extensions, contains('.sql'));
+        expect(extensions, contains('.json'));
+        expect(extensions, isNotEmpty);
+      });
+
+      test('should return reasonable max backup file size', () {
+        final maxSize = service.getMaxBackupFileSize();
+        expect(maxSize, greaterThan(0));
+        expect(maxSize, lessThanOrEqualTo(100 * 1024 * 1024)); // Should be <= 100MB
+      });
+
+      test('should return appropriate backup frequency', () {
+        final frequency = service.getRecommendedBackupFrequency();
+        expect(frequency.inHours, greaterThanOrEqualTo(12));
+        expect(frequency.inHours, lessThanOrEqualTo(24));
+      });
+
+      test('should indicate background backup support correctly', () {
+        final supports = service.supportsBackgroundBackup();
+        expect(supports, isA<bool>());
+      });
+    });
+
+    group('Platform-Specific Features', () {
+      testWidgets('should check external storage availability', (tester) async {
+        final available = await service.isExternalStorageAvailable();
+        expect(available, isA<bool>());
+      });
+
+      testWidgets('should get shareable directory', (tester) async {
+        final directory = await service.getShareableDirectory();
+        expect(directory, anyOf(isNull, isA<String>()));
+      });
+
+      testWidgets('should validate backup file sizes', (tester) async {
+        // This will return false for non-existent files
+        final isValid = await service.isBackupFileSizeValid('non_existent.json');
+        expect(isValid, isFalse);
+      });
+    });
+
+    group('Enhanced Permission Handling', () {
+      testWidgets('should use platform-specific permission checking', (tester) async {
+        final hasPermission = await service.hasWritePermission();
+        expect(hasPermission, isA<bool>());
+      });
+
+      testWidgets('should handle permission requests appropriately', (tester) async {
+        try {
+          await service.requestWritePermission();
+        } catch (e) {
+          expect(e, isA<FilePermissionException>());
+        }
+      });
+    });
+
+    group('File Sharing Operations', () {
+      testWidgets('should handle copy to shareable location gracefully', (tester) async {
+        try {
+          final result = await service.copyBackupToShareableLocation('non_existent.json');
+          expect(result, isNull);
+        } catch (e) {
+          expect(e, isA<BackupException>());
+          expect((e as BackupException).code, equals('SOURCE_FILE_NOT_FOUND'));
+        }
+      });
+    });
+
+    group('File Extension Logic', () {
+      test('should identify backup file extensions correctly', () {
         // Test the logic for identifying backup files
         final jsonFile = 'backup.json';
         final sqlFile = 'backup.sql';

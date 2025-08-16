@@ -26,6 +26,11 @@ import 'package:mockito/src/dummies.dart' as _i4;
 // ignore_for_file: camel_case_types
 // ignore_for_file: subtype_of_sealed_class
 
+class _FakeDuration_0 extends _i1.SmartFake implements Duration {
+  _FakeDuration_0(Object parent, Invocation parentInvocation)
+    : super(parent, parentInvocation);
+}
+
 /// A class which mocks [SqlExportService].
 ///
 /// See the documentation for Mockito's code generation for more information.
@@ -216,4 +221,71 @@ class MockFileManagementService extends _i1.Mock
             returnValueForMissingStub: _i3.Future<void>.value(),
           )
           as _i3.Future<void>);
+
+  @override
+  _i3.Future<bool> isExternalStorageAvailable() =>
+      (super.noSuchMethod(
+            Invocation.method(#isExternalStorageAvailable, []),
+            returnValue: _i3.Future<bool>.value(false),
+          )
+          as _i3.Future<bool>);
+
+  @override
+  _i3.Future<String?> getShareableDirectory() =>
+      (super.noSuchMethod(
+            Invocation.method(#getShareableDirectory, []),
+            returnValue: _i3.Future<String?>.value(),
+          )
+          as _i3.Future<String?>);
+
+  @override
+  List<String> getSupportedBackupExtensions() =>
+      (super.noSuchMethod(
+            Invocation.method(#getSupportedBackupExtensions, []),
+            returnValue: <String>[],
+          )
+          as List<String>);
+
+  @override
+  int getMaxBackupFileSize() =>
+      (super.noSuchMethod(
+            Invocation.method(#getMaxBackupFileSize, []),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  bool supportsBackgroundBackup() =>
+      (super.noSuchMethod(
+            Invocation.method(#supportsBackgroundBackup, []),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  Duration getRecommendedBackupFrequency() =>
+      (super.noSuchMethod(
+            Invocation.method(#getRecommendedBackupFrequency, []),
+            returnValue: _FakeDuration_0(
+              this,
+              Invocation.method(#getRecommendedBackupFrequency, []),
+            ),
+          )
+          as Duration);
+
+  @override
+  _i3.Future<String?> copyBackupToShareableLocation(String? fileName) =>
+      (super.noSuchMethod(
+            Invocation.method(#copyBackupToShareableLocation, [fileName]),
+            returnValue: _i3.Future<String?>.value(),
+          )
+          as _i3.Future<String?>);
+
+  @override
+  _i3.Future<bool> isBackupFileSizeValid(String? fileName) =>
+      (super.noSuchMethod(
+            Invocation.method(#isBackupFileSizeValid, [fileName]),
+            returnValue: _i3.Future<bool>.value(false),
+          )
+          as _i3.Future<bool>);
 }

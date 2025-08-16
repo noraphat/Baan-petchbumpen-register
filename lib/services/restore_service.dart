@@ -329,7 +329,7 @@ class RestoreService {
       
       // Read and execute emergency backup directly without security validation
       // since it's our own generated backup
-      final file = File(emergencyBackupPath);
+      final file = File(emergencyBackupPath!);
       final sqlContent = await file.readAsString();
       
       // Use the existing executeSqlFile method but bypass security checks
